@@ -269,7 +269,13 @@ async function enhanceChoiceTexts({
   event = null,
   actionLogs = [],
   traits = null,
-  skills = []
+  skills = [],
+  currentSceneSnapshot = null,
+  sceneHistory = [],
+  chosenAction = null,
+  backendResult = null,
+  zoneNpcs = [],
+  playerNpcMemory = []
 }) {
   const originalActions = normalizeChoiceArray(scene?.actions || []);
 
@@ -294,13 +300,19 @@ async function enhanceChoiceTexts({
       event,
       actionLogs,
       traits,
-      skills
+      skills,
+      currentSceneSnapshot,
+      sceneHistory,
+      chosenAction,
+      backendResult,
+      zoneNpcs,
+      playerNpcMemory
     });
 
     const result = await generateWithHuggingFace({
       userPrompt: buildChoiceEnhancerUserPrompt(memory),
       jsonMode: false,
-      maxTokens: 120,
+      maxTokens: 140,
       temperature: 0.2
     });
 

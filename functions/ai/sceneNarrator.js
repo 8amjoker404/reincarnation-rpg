@@ -19,7 +19,13 @@ async function narrateScene({
   event = null,
   actionLogs = [],
   traits = null,
-  skills = []
+  skills = [],
+  currentSceneSnapshot = null,
+  sceneHistory = [],
+  chosenAction = null,
+  backendResult = null,
+  zoneNpcs = [],
+  playerNpcMemory = []
 }) {
   try {
     const memory = buildPromptMemory({
@@ -30,14 +36,20 @@ async function narrateScene({
       event,
       actionLogs,
       traits,
-      skills
+      skills,
+      currentSceneSnapshot,
+      sceneHistory,
+      chosenAction,
+      backendResult,
+      zoneNpcs,
+      playerNpcMemory
     });
 
     const result = await generateWithHuggingFace({
       systemPrompt: SYSTEM_PROMPT,
       userPrompt: buildNarrationUserPrompt(memory),
       jsonMode: true,
-      maxTokens: 220,
+      maxTokens: 260,
       temperature: 0.6
     });
 
