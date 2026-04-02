@@ -146,7 +146,8 @@ function textMatchesActionKey(key, text) {
       "channel",
       "cast",
       "invoke",
-      "activate"
+      "activate",
+      "use "
     ]
   };
 
@@ -162,7 +163,9 @@ function textMatchesActionKey(key, text) {
       "heal",
       "hide",
       "blend",
-      "conceal"
+      "conceal",
+      "cast",
+      "invoke"
     ],
     move: [
       "attack",
@@ -172,7 +175,9 @@ function textMatchesActionKey(key, text) {
       "slash",
       "rest",
       "recover",
-      "heal"
+      "heal",
+      "cast",
+      "invoke"
     ],
     hide: [
       "attack",
@@ -182,7 +187,9 @@ function textMatchesActionKey(key, text) {
       "slash",
       "rest",
       "recover",
-      "heal"
+      "heal",
+      "cast",
+      "invoke"
     ],
     rest: [
       "attack",
@@ -198,7 +205,9 @@ function textMatchesActionKey(key, text) {
       "creep",
       "hide",
       "blend",
-      "conceal"
+      "conceal",
+      "cast",
+      "invoke"
     ],
     attack: [
       "rest",
@@ -224,11 +233,11 @@ function getSafeFallbackText(choice = {}) {
 
   const fallbackMap = {
     observe: "Scan the darkness",
-    move: "Move carefully",
+    move: "Move carefully ahead",
     hide: "Blend into the shadows",
     rest: "Catch your breath",
     attack: "Strike at the threat",
-    use_skill: "Use a skill"
+    use_skill: choice?.text || "Use a skill"
   };
 
   return fallbackMap[key] || choice?.text || "Take action";
@@ -245,7 +254,7 @@ function mapEnhancedChoices(originalActions = [], enhancedTexts = []) {
     const candidateText = sanitizeText(enhancedTexts[index], choice.text);
 
     return {
-      key: choice.key,
+      ...choice,
       text: textMatchesActionKey(choice.key, candidateText)
         ? candidateText
         : sanitizeText(choice.text, getSafeFallbackText(choice))

@@ -9,13 +9,18 @@ const {
 } = require("./skillEngine");
 const { narrateScene } = require("./ai/sceneNarrator");
 const { enhanceChoiceTexts } = require("./ai/choiceTextEnhancer");
+const {
+  buildSceneActions,
+  inferActionSetType,
+  getDefaultActionText: getSceneActionDefaultText
+} = require("./sceneActionBuilder");
 
-const DEFAULT_ACTIONS = [
-  { key: "observe", text: "Observe your surroundings" },
-  { key: "move", text: "Move carefully" },
-  { key: "hide", text: "Hide and listen" },
-  { key: "rest", text: "Rest and recover" }
-];
+const DEFAULT_ACTIONS = buildSceneActions({
+  type: "neutral",
+  player: null,
+  zone: null,
+  skills: []
+}).map(({ slot, ...action }) => action);
 
 async function playAction(userId, payload) {
   const connection = await db.getConnection();
@@ -92,13 +97,15 @@ async function playAction(userId, payload) {
     }
 
     await syncPlayerSkillsForPlayer(connection, player.id);
+    const currentSkills = await getPlayerSkillsSummary(connection, player.id);
 
     const resolution = await resolvePlayAction(connection, {
       player,
       currentScene,
       currentZone,
       actionKey,
-      payload
+      payload,
+      skills: currentSkills
     });
 
     if (resolution?.event?.skill_error) {
@@ -162,7 +169,8 @@ async function playAction(userId, payload) {
       zone: nextZone,
       event: resolution?.event || null,
       actionKey,
-      resolution
+      resolution,
+      skills
     });
 
     const aiPresentation = await buildAiPresentation({
@@ -445,7 +453,8 @@ function buildContinuationBaseScene({
   zone,
   event,
   actionKey,
-  resolution
+  resolution,
+  skills = []
 }) {
   const eventSummary =
     cleanString(event?.summary) ||
@@ -453,6 +462,21 @@ function buildContinuationBaseScene({
     "The world reacts to your choice.";
 
   const titlePrefix = getActionSceneTitlePrefix(actionKey);
+
+  const actionType = inferActionSetType({
+    actionKey,
+    zone,
+    dangerLevel:
+      resolution?.nextScene?.danger_level || zone?.difficulty_level || 1
+  });
+
+  const generatedActions = buildSceneActions({
+    type: actionType,
+    player,
+    zone,
+    skills,
+    actionKey
+  });
 
   return sanitizeSceneForStorage(
     {
@@ -464,7 +488,7 @@ function buildContinuationBaseScene({
       danger_level: normalizeDangerLevel(
         resolution?.nextScene?.danger_level || zone.difficulty_level
       ),
-      actions: normalizeActions(resolution?.nextScene?.actions || DEFAULT_ACTIONS)
+      actions: generatedActions
     },
     zone
   );
@@ -964,7 +988,17 @@ async function upsertSceneAiCache(
 }
 
 function sanitizeSceneForStorage(scene, zone) {
-  const actions = normalizeActions(scene?.actions || DEFAULT_ACTIONS);
+  const fallbackActions = buildSceneActions({
+    type: inferActionSetType({
+      zone,
+      dangerLevel: scene?.danger_level || zone?.difficulty_level || 1
+    }),
+    player: null,
+    zone,
+    skills: []
+  });
+
+  const actions = normalizeActions(scene?.actions || fallbackActions);
 
   return {
     scene_title: cleanString(scene?.scene_title) || `Scene in ${zone.name}`,
@@ -997,7 +1031,7 @@ function normalizeActions(actions) {
       key,
       text:
         cleanString(raw.text || raw.label || raw.name) ||
-        getDefaultActionText(key)
+        getSceneActionDefaultText(key)
     });
   }
 
@@ -1012,25 +1046,6 @@ function normalizeActionKey(key) {
   }
 
   return "observe";
-}
-
-function getDefaultActionText(actionKey) {
-  switch (actionKey) {
-    case "observe":
-      return "Observe your surroundings";
-    case "move":
-      return "Move carefully";
-    case "hide":
-      return "Hide and listen";
-    case "rest":
-      return "Rest and recover";
-    case "attack":
-      return "Attack the threat";
-    case "use_skill":
-      return "Use a skill";
-    default:
-      return "Continue forward";
-  }
 }
 
 function normalizeDangerLevel(value) {

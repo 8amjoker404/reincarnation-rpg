@@ -31,7 +31,17 @@ function normalizeSkills(skills = []) {
           skill_key: String(skill?.skill_key || "").trim(),
           skill_type: String(skill?.skill_type || "").trim().toLowerCase(),
           description: String(skill?.description || "").trim(),
-          is_unlocked: Boolean(entry?.is_unlocked)
+          is_unlocked: Boolean(
+            entry?.is_unlocked === undefined ? true : entry?.is_unlocked
+          ),
+          cooldown_remaining: Number(
+            entry?.cooldown_remaining ??
+              entry?.current_cooldown ??
+              entry?.remaining_cooldown ??
+              0
+          ),
+          energy_cost: Number(skill?.energy_cost ?? entry?.energy_cost ?? 0),
+          hp_cost: Number(skill?.hp_cost ?? entry?.hp_cost ?? 0)
         };
       })
     : [];
@@ -147,6 +157,7 @@ ${JSON.stringify(memory, null, 2)}
 
 function buildChoiceEnhancerUserPrompt(memory) {
   const actions = normalizeActions(memory?.scene?.actions || []);
+  const hasUseSkill = actions.some((action) => action.key === "use_skill");
 
   return `
 Rewrite the 4 player choice texts for a dark fantasy reincarnation RPG.
@@ -165,7 +176,10 @@ Rules:
 - Never turn move into rest, hide, attack, or observe
 - Never turn observe into move, hide, rest, or attack
 - Never turn use_skill into a normal physical action
-- If a choice key is use_skill, the text must clearly sound like using a learned ability or special power
+- Do not invent a skill option if one does not already exist in the input
+- If no input choice has key "use_skill", do not make any option sound magical, supernatural, or like a special ability
+- If a choice key is use_skill, the text must clearly sound like using a learned ability or named skill
+- If the input use_skill text includes a skill name, preserve that skill identity
 - Do not add numbering
 - Do not add bullets
 - Do not add labels
@@ -182,10 +196,12 @@ Action key meaning guide:
 - hide = conceal yourself, blend in, stay low, melt into cover
 - rest = recover, catch breath, steady yourself, regain strength
 - attack = strike, ambush, lunge, slash, rush the threat
-- use_skill = activate a learned ability, channel power, cast a technique
+- use_skill = activate a learned ability, channel power, cast a technique, use the named skill
 
 Input choices:
 ${JSON.stringify(actions, null, 2)}
+
+Has skill option in input: ${hasUseSkill ? "yes" : "no"}
 
 Scene context:
 ${JSON.stringify(
@@ -197,7 +213,8 @@ ${JSON.stringify(
       danger_level: memory?.scene?.danger_level || null,
       environment_tag: memory?.scene?.environment_tag || null
     },
-    event: memory?.event || null
+    event: memory?.event || null,
+    unlocked_skills: memory?.unlocked_skills || []
   },
   null,
   2

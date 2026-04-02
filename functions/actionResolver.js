@@ -1,4 +1,8 @@
 const { resolvePlayerSkillUse } = require("./skillEngine");
+const {
+  buildSceneActions,
+  inferActionSetType
+} = require("./sceneActionBuilder");
 
 const ALLOWED_ACTION_KEYS = [
   "observe",
@@ -71,34 +75,19 @@ function enrichBehaviorTracking(actionKey, resolution) {
   };
 }
 
-function buildActionSet(type = "neutral") {
-  if (type === "safe") {
-    return [
-      { key: "observe", text: "Observe your surroundings" },
-      { key: "move", text: "Move carefully" },
-      { key: "rest", text: "Rest and recover" },
-      { key: "use_skill", text: "Use a skill" }
-    ];
-  }
-
-  if (type === "danger") {
-    return [
-      { key: "hide", text: "Hide and lower your presence" },
-      { key: "move", text: "Move before danger closes in" },
-      { key: "attack", text: "Strike first" },
-      { key: "use_skill", text: "Use a skill" }
-    ];
-  }
-
-  return [
-    { key: "observe", text: "Observe your surroundings" },
-    { key: "move", text: "Move carefully" },
-    { key: "hide", text: "Hide and listen" },
-    { key: "use_skill", text: "Use a skill" }
-  ];
+function buildActionSet(type = "neutral", context = {}) {
+  return buildSceneActions({
+    type,
+    player: context.player || null,
+    zone: context.currentZone || context.zone || null,
+    skills: context.skills || [],
+    actionKey: context.actionKey || null
+  });
 }
 
-async function handleObserve({ currentZone }) {
+async function handleObserve(context) {
+  const { currentZone } = context;
+
   return {
     statChanges: {
       energy: -1,
@@ -108,10 +97,11 @@ async function handleObserve({ currentZone }) {
     nextZone: currentZone,
     nextScene: {
       scene_title: `You Study ${currentZone.name}`,
-      scene_text: `You slow down and read the land. Tracks, sound, scent, and movement begin to make more sense.`,
+      scene_text:
+        "You slow down and read the land. Tracks, sound, scent, and movement begin to make more sense.",
       environment_tag: currentZone.environment_tag || null,
       danger_level: currentZone.difficulty_level || "low",
-      actions: buildActionSet("neutral")
+      actions: buildActionSet("neutral", context)
     },
     event: {
       action: "observe",
@@ -120,7 +110,9 @@ async function handleObserve({ currentZone }) {
   };
 }
 
-async function handleMove(connection, { currentZone }) {
+async function handleMove(connection, context) {
+  const { currentZone } = context;
+
   const [rows] = await connection.query(
     `
       SELECT
@@ -142,9 +134,8 @@ async function handleMove(connection, { currentZone }) {
   );
 
   const nextZone = rows[0] || currentZone;
-  const actionSet = Number(nextZone.is_safe_zone || 0) === 1
-    ? buildActionSet("safe")
-    : buildActionSet("neutral");
+  const actionType =
+    Number(nextZone.is_safe_zone || 0) === 1 ? "safe" : "neutral";
 
   return {
     statChanges: {
@@ -154,14 +145,20 @@ async function handleMove(connection, { currentZone }) {
     },
     nextZone,
     nextScene: {
-      scene_title: nextZone.id === currentZone.id ? `You Reposition in ${currentZone.name}` : `You Move Into ${nextZone.name}`,
+      scene_title:
+        nextZone.id === currentZone.id
+          ? `You Reposition in ${currentZone.name}`
+          : `You Move Into ${nextZone.name}`,
       scene_text:
         nextZone.id === currentZone.id
-          ? `You shift your path and footing, but remain within the same area.`
-          : `You push forward and enter a new stretch of the world.`,
+          ? "You shift your path and footing, but remain within the same area."
+          : "You push forward and enter a new stretch of the world.",
       environment_tag: nextZone.environment_tag || null,
       danger_level: nextZone.difficulty_level || "low",
-      actions: actionSet
+      actions: buildActionSet(actionType, {
+        ...context,
+        currentZone: nextZone
+      })
     },
     event: {
       action: "move",
@@ -173,9 +170,19 @@ async function handleMove(connection, { currentZone }) {
   };
 }
 
-async function handleRest({ player, currentZone }) {
-  const healAmount = Math.max(2, Math.floor(Number(player.max_hp || 100) * 0.08));
-  const energyAmount = Math.max(4, Math.floor(Number(player.max_energy || 50) * 0.2));
+async function handleRest(context) {
+  const { player, currentZone } = context;
+
+  const healAmount = Math.max(
+    2,
+    Math.floor(Number(player.max_hp || 100) * 0.08)
+  );
+  const energyAmount = Math.max(
+    4,
+    Math.floor(Number(player.max_energy || 50) * 0.2)
+  );
+  const actionType =
+    Number(currentZone.is_safe_zone || 0) === 1 ? "safe" : "neutral";
 
   return {
     statChanges: {
@@ -186,10 +193,14 @@ async function handleRest({ player, currentZone }) {
     nextZone: currentZone,
     nextScene: {
       scene_title: `You Rest in ${currentZone.name}`,
-      scene_text: `You lower your guard just enough to recover. The pause helps, even if the world remains cruel.`,
+      scene_text:
+        "You lower your guard just enough to recover. The pause helps, even if the world remains cruel.",
       environment_tag: currentZone.environment_tag || null,
-      danger_level: Number(currentZone.is_safe_zone || 0) === 1 ? "low" : currentZone.difficulty_level || "medium",
-      actions: buildActionSet(Number(currentZone.is_safe_zone || 0) === 1 ? "safe" : "neutral")
+      danger_level:
+        Number(currentZone.is_safe_zone || 0) === 1
+          ? "low"
+          : currentZone.difficulty_level || "medium",
+      actions: buildActionSet(actionType, context)
     },
     event: {
       action: "rest",
@@ -198,7 +209,9 @@ async function handleRest({ player, currentZone }) {
   };
 }
 
-async function handleHide({ currentZone }) {
+async function handleHide(context) {
+  const { currentZone } = context;
+
   return {
     statChanges: {
       hp: 0,
@@ -207,11 +220,12 @@ async function handleHide({ currentZone }) {
     },
     nextZone: currentZone,
     nextScene: {
-      scene_title: `You Hide Yourself`,
-      scene_text: `You pull your body low and reduce your presence. The immediate pressure drops.`,
+      scene_title: "You Hide Yourself",
+      scene_text:
+        "You pull your body low and reduce your presence. The immediate pressure drops.",
       environment_tag: currentZone.environment_tag || null,
       danger_level: "low",
-      actions: buildActionSet("safe")
+      actions: buildActionSet("safe", context)
     },
     event: {
       action: "hide",
@@ -220,7 +234,8 @@ async function handleHide({ currentZone }) {
   };
 }
 
-async function handleAttack({ player, currentZone }) {
+async function handleAttack(context) {
+  const { currentZone } = context;
   const hpLoss = currentZone.difficulty_level === "high" ? -6 : 0;
 
   return {
@@ -231,22 +246,25 @@ async function handleAttack({ player, currentZone }) {
     },
     nextZone: currentZone,
     nextScene: {
-      scene_title: `You Strike First`,
-      scene_text: `You choose force before hesitation can weaken you. The area becomes more tense after the clash.`,
+      scene_title: "You Strike First",
+      scene_text:
+        "You choose force before hesitation can weaken you. The area becomes more tense after the clash.",
       environment_tag: currentZone.environment_tag || null,
       danger_level: "high",
-      actions: buildActionSet("danger")
+      actions: buildActionSet("danger", context)
     },
     event: {
       action: "attack",
-      summary: hpLoss < 0
-        ? "You attacked and took some damage in return."
-        : "You attacked and raised the danger around you."
+      summary:
+        hpLoss < 0
+          ? "You attacked and took some damage in return."
+          : "You attacked and raised the danger around you."
     }
   };
 }
 
-async function handleUseSkill(connection, { player, payload }) {
+async function handleUseSkill(connection, context) {
+  const { player, payload, currentZone, skills = [] } = context;
   const skillResult = await resolvePlayerSkillUse(connection, player.id, payload);
 
   if (!skillResult.ok) {
@@ -262,9 +280,15 @@ async function handleUseSkill(connection, { player, payload }) {
       nextScene: {
         scene_title: "Your Skill Fails to Answer",
         scene_text: skillResult.message,
-        environment_tag: null,
-        danger_level: "low",
-        actions: buildActionSet("neutral")
+        environment_tag: currentZone?.environment_tag || null,
+        danger_level: currentZone?.difficulty_level || "low",
+        actions: buildSceneActions({
+          type: "neutral",
+          player,
+          zone: currentZone,
+          skills,
+          actionKey: "use_skill"
+        })
       },
       event: {
         action: "use_skill",
@@ -275,7 +299,28 @@ async function handleUseSkill(connection, { player, payload }) {
     };
   }
 
-  return skillResult.outcome;
+  const outcome = skillResult.outcome || {};
+
+  const inferredType = inferActionSetType({
+    actionKey: "use_skill",
+    zone: outcome?.nextZone || currentZone,
+    dangerLevel: outcome?.nextScene?.danger_level,
+    explicitType: null
+  });
+
+  return {
+    ...outcome,
+    nextScene: {
+      ...(outcome.nextScene || {}),
+      actions: buildSceneActions({
+        type: inferredType,
+        player,
+        zone: outcome?.nextZone || currentZone,
+        skills,
+        actionKey: "use_skill"
+      })
+    }
+  };
 }
 
 module.exports = {
