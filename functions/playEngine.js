@@ -1,3 +1,4 @@
+// backend/functions/playEngine.js
 const db = require("../config/db");
 const { ALLOWED_ACTION_KEYS, resolvePlayAction } = require("./actionResolver");
 const {
@@ -371,7 +372,7 @@ async function buildEnhancedPlayPresentation({
     : null;
 
   return {
-    scene: finalScene,
+    scene: addChoiceDisplayFields(finalScene),
     event: finalEvent,
     ai: {
       narration_applied: narrationResult.ok,
@@ -903,6 +904,22 @@ function formatScene(scene) {
     ],
     created_at: scene.created_at,
     updated_at: scene.updated_at
+  };
+}
+
+function addChoiceDisplayFields(scene) {
+  const actions = Array.isArray(scene?.actions) ? scene.actions : [];
+
+  return {
+    ...scene,
+    choice_1: actions[0]?.text || "",
+    choice_1_key: actions[0]?.key || "",
+    choice_2: actions[1]?.text || "",
+    choice_2_key: actions[1]?.key || "",
+    choice_3: actions[2]?.text || "",
+    choice_3_key: actions[2]?.key || "",
+    choice_4: actions[3]?.text || "",
+    choice_4_key: actions[3]?.key || ""
   };
 }
 
