@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Generation Time: Apr 02, 2026 at 10:51 PM
+-- Generation Time: Apr 02, 2026 at 11:11 PM
 -- Server version: 10.4.28-MariaDB
 -- PHP Version: 8.2.4
 
@@ -20,6 +20,35 @@ SET time_zone = "+00:00";
 --
 -- Database: `choice`
 --
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `npcs`
+--
+
+CREATE TABLE `npcs` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `name` varchar(120) NOT NULL,
+  `npc_type` varchar(50) NOT NULL,
+  `description` text DEFAULT NULL,
+  `temperament` enum('aggressive','neutral','passive','curious') NOT NULL DEFAULT 'neutral',
+  `hostility_level` int(11) NOT NULL DEFAULT 0,
+  `intelligence_level` int(11) NOT NULL DEFAULT 0,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `npcs`
+--
+
+INSERT INTO `npcs` (`id`, `name`, `npc_type`, `description`, `temperament`, `hostility_level`, `intelligence_level`, `is_active`, `created_at`, `updated_at`) VALUES
+(1, 'Ashfang Scout', 'predator', 'A lean hunting beast that studies movement before striking.', 'aggressive', 7, 4, 1, '2026-04-02 21:07:35', '2026-04-02 21:07:35'),
+(2, 'Mossback Grazer', 'beast', 'A slow herbivore with a thick moss-coated back.', 'passive', 1, 2, 1, '2026-04-02 21:07:35', '2026-04-02 21:07:35'),
+(3, 'Veil Whisper', 'spirit', 'A drifting spirit presence that watches without speaking.', 'curious', 2, 7, 1, '2026-04-02 21:07:35', '2026-04-02 21:07:35'),
+(4, 'Broken Pilgrim', 'survivor', 'A weathered wanderer who has outlived many nights.', 'neutral', 3, 6, 1, '2026-04-02 21:07:35', '2026-04-02 21:07:35');
 
 -- --------------------------------------------------------
 
@@ -91,7 +120,7 @@ CREATE TABLE `player_action_logs` (
 INSERT INTO `player_action_logs` (`id`, `player_id`, `action_key`, `count`, `created_at`, `updated_at`) VALUES
 (2, 1, 'observe', 1, '2026-04-02 18:11:29', '2026-04-02 18:11:29'),
 (3, 1, 'move', 2, '2026-04-02 18:58:03', '2026-04-02 20:47:53'),
-(5, 1, 'hide', 1, '2026-04-02 20:48:54', '2026-04-02 20:48:54');
+(5, 1, 'hide', 2, '2026-04-02 20:48:54', '2026-04-02 21:09:00');
 
 -- --------------------------------------------------------
 
@@ -124,7 +153,27 @@ CREATE TABLE `player_current_scene` (
 --
 
 INSERT INTO `player_current_scene` (`id`, `player_id`, `zone_id`, `scene_title`, `scene_text`, `environment_tag`, `danger_level`, `option_1`, `option_1_key`, `option_2`, `option_2_key`, `option_3`, `option_3_key`, `option_4`, `option_4_key`, `created_at`, `updated_at`) VALUES
-(5, 1, 17, 'Silence Beneath Danger — Tall Grass Hollow', 'You hid and reduced your visibility. Now LightPotato must decide what happens next in Tall Grass Hollow.', 'wild', '1', 'Scan the darkness', 'observe', 'Advance quietly', 'move', 'Rest momentarily', 'rest', 'Blend into the shadows', 'hide', '2026-04-02 18:03:44', '2026-04-02 20:49:05');
+(5, 1, 17, 'Silence Beneath Danger — Tall Grass Hollow', 'You hid and reduced your visibility. Now LightPotato must decide what happens next in Tall Grass Hollow.', 'wild', '1', 'Scan the darkness', 'observe', 'Advance quietly', 'move', 'Rest momentarily', 'rest', 'Blend into the shadows', 'hide', '2026-04-02 18:03:44', '2026-04-02 21:09:12');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `player_npc_memory`
+--
+
+CREATE TABLE `player_npc_memory` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `player_id` int(10) UNSIGNED NOT NULL,
+  `npc_id` int(10) UNSIGNED NOT NULL,
+  `first_met_at` timestamp NULL DEFAULT current_timestamp(),
+  `last_seen_at` timestamp NULL DEFAULT current_timestamp(),
+  `relationship_state` varchar(50) NOT NULL DEFAULT 'unknown',
+  `familiarity_score` int(11) NOT NULL DEFAULT 0,
+  `threat_score` int(11) NOT NULL DEFAULT 0,
+  `memory_notes` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 
@@ -159,7 +208,7 @@ CREATE TABLE `player_scene_ai_cache` (
 --
 
 INSERT INTO `player_scene_ai_cache` (`id`, `player_id`, `player_scene_id`, `source_scene_updated_at`, `raw_scene_title`, `raw_scene_text`, `raw_actions_json`, `ai_scene_title`, `ai_scene_text`, `ai_actions_json`, `ai_event_summary`, `narration_applied`, `choice_text_applied`, `narration_model`, `choice_model`, `narration_error`, `choice_error`, `created_at`, `updated_at`) VALUES
-(3, 1, 5, '2026-04-02 20:49:05', 'Silence Beneath Danger — Tall Grass Hollow', 'You hid and reduced your visibility. Now LightPotato must decide what happens next in Tall Grass Hollow.', '[{\"slot\":1,\"key\":\"observe\",\"text\":\"Scan the darkness\"},{\"slot\":2,\"key\":\"move\",\"text\":\"Move carefully ahead\"},{\"slot\":3,\"key\":\"rest\",\"text\":\"Catch your breath\"},{\"slot\":4,\"key\":\"hide\",\"text\":\"Blend into the shadows\"}]', 'Silence Beneath Danger — Tall Grass Hollow', 'You hid and reduced your visibility. Now LightPotato must decide what happens next in Tall Grass Hollow.', '[{\"slot\":1,\"key\":\"observe\",\"text\":\"Scan the darkness\"},{\"slot\":2,\"key\":\"move\",\"text\":\"Advance quietly\"},{\"slot\":3,\"key\":\"rest\",\"text\":\"Rest momentarily\"},{\"slot\":4,\"key\":\"hide\",\"text\":\"Blend into the shadows\"}]', 'You hid and reduced your visibility.', 0, 1, NULL, 'mistralai/Mistral-7B-Instruct-v0.2:featherless-ai', 'AI narration failed', NULL, '2026-04-02 18:11:42', '2026-04-02 20:49:05');
+(3, 1, 5, '2026-04-02 21:09:12', 'Silence Beneath Danger — Tall Grass Hollow', 'You hid and reduced your visibility. Now LightPotato must decide what happens next in Tall Grass Hollow.', '[{\"slot\":1,\"key\":\"observe\",\"text\":\"Scan the darkness\"},{\"slot\":2,\"key\":\"move\",\"text\":\"Move carefully ahead\"},{\"slot\":3,\"key\":\"rest\",\"text\":\"Catch your breath\"},{\"slot\":4,\"key\":\"hide\",\"text\":\"Blend into the shadows\"}]', 'Silence Beneath Danger — Tall Grass Hollow', 'You hid and reduced your visibility. Now LightPotato must decide what happens next in Tall Grass Hollow.', '[{\"slot\":1,\"key\":\"observe\",\"text\":\"Scan the darkness\"},{\"slot\":2,\"key\":\"move\",\"text\":\"Advance quietly\"},{\"slot\":3,\"key\":\"rest\",\"text\":\"Rest momentarily\"},{\"slot\":4,\"key\":\"hide\",\"text\":\"Blend into the shadows\"}]', 'You hid and reduced your visibility.', 0, 1, NULL, 'mistralai/Mistral-7B-Instruct-v0.2:featherless-ai', 'AI narration failed', NULL, '2026-04-02 18:11:42', '2026-04-02 21:09:12');
 
 -- --------------------------------------------------------
 
@@ -186,7 +235,8 @@ CREATE TABLE `player_scene_history` (
 
 INSERT INTO `player_scene_history` (`id`, `player_id`, `zone_id`, `scene_title`, `scene_text`, `event_summary`, `chosen_action_key`, `danger_level`, `environment_tag`, `created_at`) VALUES
 (1, 1, 17, 'A Shift in the Path — Tall Grass Hollow', 'You moved into Tall Grass Hollow. Now LightPotato must decide what happens next in Tall Grass Hollow.', 'You moved within the current area.', 'move', '1', 'wild', '2026-04-02 20:48:14'),
-(2, 1, 17, 'A Shift in the Path — Tall Grass Hollow', 'You moved within the current area. Now LightPotato must decide what happens next in Tall Grass Hollow.', 'You hid and reduced your visibility.', 'hide', '1', 'wild', '2026-04-02 20:49:05');
+(2, 1, 17, 'A Shift in the Path — Tall Grass Hollow', 'You moved within the current area. Now LightPotato must decide what happens next in Tall Grass Hollow.', 'You hid and reduced your visibility.', 'hide', '1', 'wild', '2026-04-02 20:49:05'),
+(3, 1, 17, 'Silence Beneath Danger — Tall Grass Hollow', 'You hid and reduced your visibility. Now LightPotato must decide what happens next in Tall Grass Hollow.', 'You hid and reduced your visibility.', 'hide', '1', 'wild', '2026-04-02 21:09:12');
 
 -- --------------------------------------------------------
 
@@ -211,10 +261,10 @@ CREATE TABLE `player_skills` (
 --
 
 INSERT INTO `player_skills` (`id`, `player_id`, `skill_id`, `skill_level`, `is_unlocked`, `unlock_reason`, `current_cooldown`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, 1, 0, 'Use attack 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 20:48:54'),
-(2, 1, 2, 1, 0, 'Use hide 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 20:48:54'),
-(3, 1, 3, 1, 0, 'Survive 3 days', 0, '2026-04-02 05:47:20', '2026-04-02 20:48:54'),
-(4, 1, 4, 1, 0, 'Use move 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 20:48:54');
+(1, 1, 1, 1, 0, 'Use attack 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 21:09:01'),
+(2, 1, 2, 1, 0, 'Use hide 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 21:09:01'),
+(3, 1, 3, 1, 0, 'Survive 3 days', 0, '2026-04-02 05:47:20', '2026-04-02 21:09:01'),
+(4, 1, 4, 1, 0, 'Use move 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 21:09:01');
 
 -- --------------------------------------------------------
 
@@ -238,7 +288,7 @@ CREATE TABLE `player_traits` (
 --
 
 INSERT INTO `player_traits` (`id`, `player_id`, `aggressive`, `intelligence`, `stealth`, `survival`, `created_at`, `updated_at`) VALUES
-(1, 1, 0, 1, 1, 3, '2026-04-02 05:13:24', '2026-04-02 20:48:54');
+(1, 1, 0, 1, 2, 3, '2026-04-02 05:13:24', '2026-04-02 21:09:00');
 
 -- --------------------------------------------------------
 
@@ -438,9 +488,44 @@ INSERT INTO `zones` (`id`, `name`, `zone_type`, `difficulty_level`, `environment
 (39, 'Reedshade Bank', 'river_path', 'low', 'forest', 'Soft ground, moving reeds, and a clear line of sight along the water.', 1, 12, 1, '2026-04-02 05:50:50', '2026-04-02 05:50:50'),
 (40, 'Glasswater Bend', 'river_depth', 'medium', 'forest', 'A deeper bend in the water where tracks stop too suddenly.', 0, 12, 1, '2026-04-02 05:50:50', '2026-04-02 05:50:50');
 
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `zone_npcs`
+--
+
+CREATE TABLE `zone_npcs` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `zone_id` int(10) UNSIGNED NOT NULL,
+  `npc_id` int(10) UNSIGNED NOT NULL,
+  `spawn_weight` int(11) NOT NULL DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `zone_npcs`
+--
+
+INSERT INTO `zone_npcs` (`id`, `zone_id`, `npc_id`, `spawn_weight`, `created_at`, `updated_at`) VALUES
+(1, 1, 2, 8, '2026-04-02 21:07:35', '2026-04-02 21:07:35'),
+(2, 1, 4, 2, '2026-04-02 21:07:35', '2026-04-02 21:07:35'),
+(3, 2, 1, 6, '2026-04-02 21:07:35', '2026-04-02 21:07:35'),
+(4, 3, 3, 5, '2026-04-02 21:07:35', '2026-04-02 21:07:35'),
+(5, 3, 1, 3, '2026-04-02 21:07:35', '2026-04-02 21:07:35'),
+(6, 4, 1, 8, '2026-04-02 21:07:35', '2026-04-02 21:07:35'),
+(7, 5, 3, 4, '2026-04-02 21:07:35', '2026-04-02 21:07:35'),
+(8, 5, 4, 3, '2026-04-02 21:07:35', '2026-04-02 21:07:35');
+
 --
 -- Indexes for dumped tables
 --
+
+--
+-- Indexes for table `npcs`
+--
+ALTER TABLE `npcs`
+  ADD PRIMARY KEY (`id`);
 
 --
 -- Indexes for table `players`
@@ -467,6 +552,15 @@ ALTER TABLE `player_current_scene`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `unique_player_current_scene` (`player_id`),
   ADD KEY `idx_player_current_scene_zone_id` (`zone_id`);
+
+--
+-- Indexes for table `player_npc_memory`
+--
+ALTER TABLE `player_npc_memory`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uniq_player_npc_memory` (`player_id`,`npc_id`),
+  ADD KEY `idx_player_npc_memory_player_id` (`player_id`),
+  ADD KEY `idx_player_npc_memory_npc_id` (`npc_id`);
 
 --
 -- Indexes for table `player_scene_ai_cache`
@@ -537,8 +631,23 @@ ALTER TABLE `zones`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Indexes for table `zone_npcs`
+--
+ALTER TABLE `zone_npcs`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uniq_zone_npc_pair` (`zone_id`,`npc_id`),
+  ADD KEY `idx_zone_npcs_zone_id` (`zone_id`),
+  ADD KEY `idx_zone_npcs_npc_id` (`npc_id`);
+
+--
 -- AUTO_INCREMENT for dumped tables
 --
+
+--
+-- AUTO_INCREMENT for table `npcs`
+--
+ALTER TABLE `npcs`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `players`
@@ -550,37 +659,43 @@ ALTER TABLE `players`
 -- AUTO_INCREMENT for table `player_action_logs`
 --
 ALTER TABLE `player_action_logs`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `player_current_scene`
 --
 ALTER TABLE `player_current_scene`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+
+--
+-- AUTO_INCREMENT for table `player_npc_memory`
+--
+ALTER TABLE `player_npc_memory`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `player_scene_ai_cache`
 --
 ALTER TABLE `player_scene_ai_cache`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `player_scene_history`
 --
 ALTER TABLE `player_scene_history`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `player_skills`
 --
 ALTER TABLE `player_skills`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=165;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=173;
 
 --
 -- AUTO_INCREMENT for table `player_traits`
 --
 ALTER TABLE `player_traits`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=30;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=31;
 
 --
 -- AUTO_INCREMENT for table `races`
@@ -607,6 +722,12 @@ ALTER TABLE `zones`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
 
 --
+-- AUTO_INCREMENT for table `zone_npcs`
+--
+ALTER TABLE `zone_npcs`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+
+--
 -- Constraints for dumped tables
 --
 
@@ -630,6 +751,13 @@ ALTER TABLE `player_action_logs`
 ALTER TABLE `player_current_scene`
   ADD CONSTRAINT `fk_player_current_scene_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_player_current_scene_zone` FOREIGN KEY (`zone_id`) REFERENCES `zones` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Constraints for table `player_npc_memory`
+--
+ALTER TABLE `player_npc_memory`
+  ADD CONSTRAINT `fk_player_npc_memory_npc` FOREIGN KEY (`npc_id`) REFERENCES `npcs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_player_npc_memory_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `player_scene_ai_cache`
@@ -663,6 +791,13 @@ ALTER TABLE `player_traits`
 --
 ALTER TABLE `race_subtypes`
   ADD CONSTRAINT `fk_race_subtypes_race` FOREIGN KEY (`race_id`) REFERENCES `races` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Constraints for table `zone_npcs`
+--
+ALTER TABLE `zone_npcs`
+  ADD CONSTRAINT `fk_zone_npcs_npc` FOREIGN KEY (`npc_id`) REFERENCES `npcs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_zone_npcs_zone` FOREIGN KEY (`zone_id`) REFERENCES `zones` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
