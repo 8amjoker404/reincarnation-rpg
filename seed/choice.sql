@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Generation Time: Apr 02, 2026 at 05:11 PM
+-- Generation Time: Apr 02, 2026 at 07:00 PM
 -- Server version: 10.4.28-MariaDB
 -- PHP Version: 8.2.4
 
@@ -53,6 +53,7 @@ CREATE TABLE `players` (
   `title` varchar(100) DEFAULT 'Nameless Being',
   `alignment_type` varchar(50) DEFAULT 'neutral',
   `current_zone_id` int(10) UNSIGNED DEFAULT NULL,
+  `has_started_scene` tinyint(1) NOT NULL DEFAULT 0,
   `is_alive` tinyint(1) NOT NULL DEFAULT 1,
   `death_reason` varchar(255) DEFAULT NULL,
   `died_at` timestamp NULL DEFAULT NULL,
@@ -65,8 +66,8 @@ CREATE TABLE `players` (
 -- Dumping data for table `players`
 --
 
-INSERT INTO `players` (`id`, `user_id`, `life_number`, `previous_player_id`, `character_name`, `race_id`, `race_subtype_id`, `level`, `year_survived`, `day_survived`, `current_hour`, `age_days`, `hp`, `max_hp`, `energy`, `max_energy`, `hunger`, `attack_stat`, `defense_stat`, `speed_stat`, `intelligence_stat`, `evolution_stage`, `title`, `alignment_type`, `current_zone_id`, `is_alive`, `death_reason`, `died_at`, `reincarnated_at`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, NULL, 'LightPotato', 3, 7, 1, 0, 1, 2, 1, 120, 120, 13, 45, 25, 15, 10, 16, 7, 1, 'Nameless Being', 'neutral', 1, 1, NULL, NULL, NULL, '2026-04-01 21:58:11', '2026-04-02 05:14:30');
+INSERT INTO `players` (`id`, `user_id`, `life_number`, `previous_player_id`, `character_name`, `race_id`, `race_subtype_id`, `level`, `year_survived`, `day_survived`, `current_hour`, `age_days`, `hp`, `max_hp`, `energy`, `max_energy`, `hunger`, `attack_stat`, `defense_stat`, `speed_stat`, `intelligence_stat`, `evolution_stage`, `title`, `alignment_type`, `current_zone_id`, `has_started_scene`, `is_alive`, `death_reason`, `died_at`, `reincarnated_at`, `created_at`, `updated_at`) VALUES
+(1, 1, 1, NULL, 'LightPotato', 3, 7, 1, 0, 1, 2, 1, 120, 120, 13, 45, 25, 15, 10, 16, 7, 1, 'Nameless Being', 'neutral', 1, 1, 1, NULL, NULL, NULL, '2026-04-01 21:58:11', '2026-04-02 16:26:22');
 
 -- --------------------------------------------------------
 
@@ -82,13 +83,6 @@ CREATE TABLE `player_action_logs` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `player_action_logs`
---
-
-INSERT INTO `player_action_logs` (`id`, `player_id`, `action_key`, `count`, `created_at`, `updated_at`) VALUES
-(1, 1, 'rest', 1, '2026-04-02 05:14:30', '2026-04-02 05:14:30');
 
 -- --------------------------------------------------------
 
@@ -121,7 +115,7 @@ CREATE TABLE `player_current_scene` (
 --
 
 INSERT INTO `player_current_scene` (`id`, `player_id`, `zone_id`, `scene_title`, `scene_text`, `environment_tag`, `danger_level`, `option_1`, `option_1_key`, `option_2`, `option_2_key`, `option_3`, `option_3_key`, `option_4`, `option_4_key`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, 'You Rest in Relative Safety', 'You take a rare moment to recover in Whispering Grasslands. Your breathing steadies and your body regains a little strength. Safety never lasts forever, but this pause helps.', 'frontier', 'low', 'Observe your surroundings', 'observe', 'Hide and lower your presence', 'hide', 'Move forward carefully', 'move', 'Strike first', 'attack', '2026-04-02 04:46:46', '2026-04-02 05:14:30');
+(4, 1, 1, 'Awakening in Whispering Grasslands', 'LightPotato awaken as a shadow wolf in Whispering Grasslands. The world feels unfamiliar, dangerous, and alive. Your instincts are raw, your body is weak, and every choice from here will shape survival.', 'frontier', '1', 'Scan the darkness', 'observe', 'Blend into the shadows', 'move', 'Creep through the undergrowth', 'hide', 'Attack from the hidden', 'rest', '2026-04-02 16:26:22', '2026-04-02 16:26:22');
 
 -- --------------------------------------------------------
 
@@ -156,7 +150,7 @@ CREATE TABLE `player_scene_ai_cache` (
 --
 
 INSERT INTO `player_scene_ai_cache` (`id`, `player_id`, `player_scene_id`, `source_scene_updated_at`, `raw_scene_title`, `raw_scene_text`, `raw_actions_json`, `ai_scene_title`, `ai_scene_text`, `ai_actions_json`, `ai_event_summary`, `narration_applied`, `choice_text_applied`, `narration_model`, `choice_model`, `narration_error`, `choice_error`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, '2026-04-02 05:14:30', 'You Rest in Relative Safety', 'You take a rare moment to recover in Whispering Grasslands. Your breathing steadies and your body regains a little strength. Safety never lasts forever, but this pause helps.', '[{\"slot\":1,\"text\":\"Observe your surroundings\",\"key\":\"observe\"},{\"slot\":2,\"text\":\"Hide and lower your presence\",\"key\":\"hide\"},{\"slot\":3,\"text\":\"Move forward carefully\",\"key\":\"move\"},{\"slot\":4,\"text\":\"Strike first\",\"key\":\"attack\"}]', 'You Rest in Relative Safety', 'You take a rare moment to recover in Whispering Grasslands. Your breathing steadies and your body regains a little strength. Safety never lasts forever, but this pause helps.', '[{\"slot\":1,\"text\":\"Scan the darkness\",\"key\":\"observe\"},{\"slot\":2,\"text\":\"Hide in the shadows\",\"key\":\"hide\"},{\"slot\":3,\"text\":\"Creep through the undergrowth\",\"key\":\"move\"},{\"slot\":4,\"text\":\"Attack unawares\",\"key\":\"attack\"}]', NULL, 1, 1, 'mistralai/Mistral-7B-Instruct-v0.2:featherless-ai', 'mistralai/Mistral-7B-Instruct-v0.2:featherless-ai', NULL, NULL, '2026-04-02 15:03:25', '2026-04-02 15:03:25');
+(2, 1, 4, '2026-04-02 16:26:22', 'Awakening in Whispering Grasslands', 'LightPotato awaken as a shadow wolf in Whispering Grasslands. The world feels unfamiliar, dangerous, and alive. Your instincts are raw, your body is weak, and every choice from here will shape survival.', '[{\"slot\":1,\"key\":\"observe\",\"text\":\"Observe your surroundings\"},{\"slot\":2,\"key\":\"move\",\"text\":\"Move carefully\"},{\"slot\":3,\"key\":\"hide\",\"text\":\"Hide and listen\"},{\"slot\":4,\"key\":\"rest\",\"text\":\"Rest and recover\"}]', 'Awakening in Whispering Grasslands', 'LightPotato awaken as a shadow wolf in Whispering Grasslands. The world feels unfamiliar, dangerous, and alive. Your instincts are raw, your body is weak, and every choice from here will shape survival.', '[{\"slot\":1,\"key\":\"observe\",\"text\":\"Scan the darkness\"},{\"slot\":2,\"key\":\"move\",\"text\":\"Blend into the shadows\"},{\"slot\":3,\"key\":\"hide\",\"text\":\"Creep through the undergrowth\"},{\"slot\":4,\"key\":\"rest\",\"text\":\"Attack from the hidden\"}]', NULL, 0, 1, NULL, 'mistralai/Mistral-7B-Instruct-v0.2:featherless-ai', 'AI narration failed', NULL, '2026-04-02 16:26:22', '2026-04-02 16:26:22');
 
 -- --------------------------------------------------------
 
@@ -181,10 +175,10 @@ CREATE TABLE `player_skills` (
 --
 
 INSERT INTO `player_skills` (`id`, `player_id`, `skill_id`, `skill_level`, `is_unlocked`, `unlock_reason`, `current_cooldown`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, 1, 0, 'Use attack 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 15:03:43'),
-(2, 1, 2, 1, 0, 'Use hide 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 15:03:43'),
-(3, 1, 3, 1, 0, 'Survive 3 days', 0, '2026-04-02 05:47:20', '2026-04-02 15:03:43'),
-(4, 1, 4, 1, 0, 'Use move 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 15:03:43');
+(1, 1, 1, 1, 0, 'Use attack 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 16:26:08'),
+(2, 1, 2, 1, 0, 'Use hide 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 16:26:08'),
+(3, 1, 3, 1, 0, 'Survive 3 days', 0, '2026-04-02 05:47:20', '2026-04-02 16:26:08'),
+(4, 1, 4, 1, 0, 'Use move 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 16:26:08');
 
 -- --------------------------------------------------------
 
@@ -517,19 +511,19 @@ ALTER TABLE `player_action_logs`
 -- AUTO_INCREMENT for table `player_current_scene`
 --
 ALTER TABLE `player_current_scene`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `player_scene_ai_cache`
 --
 ALTER TABLE `player_scene_ai_cache`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `player_skills`
 --
 ALTER TABLE `player_skills`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=101;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=113;
 
 --
 -- AUTO_INCREMENT for table `player_traits`
