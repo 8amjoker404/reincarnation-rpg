@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Generation Time: Apr 02, 2026 at 07:00 PM
+-- Generation Time: Apr 02, 2026 at 10:51 PM
 -- Server version: 10.4.28-MariaDB
 -- PHP Version: 8.2.4
 
@@ -67,7 +67,7 @@ CREATE TABLE `players` (
 --
 
 INSERT INTO `players` (`id`, `user_id`, `life_number`, `previous_player_id`, `character_name`, `race_id`, `race_subtype_id`, `level`, `year_survived`, `day_survived`, `current_hour`, `age_days`, `hp`, `max_hp`, `energy`, `max_energy`, `hunger`, `attack_stat`, `defense_stat`, `speed_stat`, `intelligence_stat`, `evolution_stage`, `title`, `alignment_type`, `current_zone_id`, `has_started_scene`, `is_alive`, `death_reason`, `died_at`, `reincarnated_at`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, NULL, 'LightPotato', 3, 7, 1, 0, 1, 2, 1, 120, 120, 13, 45, 25, 15, 10, 16, 7, 1, 'Nameless Being', 'neutral', 1, 1, 1, NULL, NULL, NULL, '2026-04-01 21:58:11', '2026-04-02 16:26:22');
+(1, 1, 1, NULL, 'LightPotato', 3, 7, 1, 0, 1, 2, 1, 120, 120, 13, 45, 25, 15, 10, 16, 7, 1, 'Nameless Being', 'neutral', 17, 1, 1, NULL, NULL, NULL, '2026-04-01 21:58:11', '2026-04-02 18:58:03');
 
 -- --------------------------------------------------------
 
@@ -83,6 +83,15 @@ CREATE TABLE `player_action_logs` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `player_action_logs`
+--
+
+INSERT INTO `player_action_logs` (`id`, `player_id`, `action_key`, `count`, `created_at`, `updated_at`) VALUES
+(2, 1, 'observe', 1, '2026-04-02 18:11:29', '2026-04-02 18:11:29'),
+(3, 1, 'move', 2, '2026-04-02 18:58:03', '2026-04-02 20:47:53'),
+(5, 1, 'hide', 1, '2026-04-02 20:48:54', '2026-04-02 20:48:54');
 
 -- --------------------------------------------------------
 
@@ -115,7 +124,7 @@ CREATE TABLE `player_current_scene` (
 --
 
 INSERT INTO `player_current_scene` (`id`, `player_id`, `zone_id`, `scene_title`, `scene_text`, `environment_tag`, `danger_level`, `option_1`, `option_1_key`, `option_2`, `option_2_key`, `option_3`, `option_3_key`, `option_4`, `option_4_key`, `created_at`, `updated_at`) VALUES
-(4, 1, 1, 'Awakening in Whispering Grasslands', 'LightPotato awaken as a shadow wolf in Whispering Grasslands. The world feels unfamiliar, dangerous, and alive. Your instincts are raw, your body is weak, and every choice from here will shape survival.', 'frontier', '1', 'Scan the darkness', 'observe', 'Blend into the shadows', 'move', 'Creep through the undergrowth', 'hide', 'Attack from the hidden', 'rest', '2026-04-02 16:26:22', '2026-04-02 16:26:22');
+(5, 1, 17, 'Silence Beneath Danger — Tall Grass Hollow', 'You hid and reduced your visibility. Now LightPotato must decide what happens next in Tall Grass Hollow.', 'wild', '1', 'Scan the darkness', 'observe', 'Advance quietly', 'move', 'Rest momentarily', 'rest', 'Blend into the shadows', 'hide', '2026-04-02 18:03:44', '2026-04-02 20:49:05');
 
 -- --------------------------------------------------------
 
@@ -150,7 +159,34 @@ CREATE TABLE `player_scene_ai_cache` (
 --
 
 INSERT INTO `player_scene_ai_cache` (`id`, `player_id`, `player_scene_id`, `source_scene_updated_at`, `raw_scene_title`, `raw_scene_text`, `raw_actions_json`, `ai_scene_title`, `ai_scene_text`, `ai_actions_json`, `ai_event_summary`, `narration_applied`, `choice_text_applied`, `narration_model`, `choice_model`, `narration_error`, `choice_error`, `created_at`, `updated_at`) VALUES
-(2, 1, 4, '2026-04-02 16:26:22', 'Awakening in Whispering Grasslands', 'LightPotato awaken as a shadow wolf in Whispering Grasslands. The world feels unfamiliar, dangerous, and alive. Your instincts are raw, your body is weak, and every choice from here will shape survival.', '[{\"slot\":1,\"key\":\"observe\",\"text\":\"Observe your surroundings\"},{\"slot\":2,\"key\":\"move\",\"text\":\"Move carefully\"},{\"slot\":3,\"key\":\"hide\",\"text\":\"Hide and listen\"},{\"slot\":4,\"key\":\"rest\",\"text\":\"Rest and recover\"}]', 'Awakening in Whispering Grasslands', 'LightPotato awaken as a shadow wolf in Whispering Grasslands. The world feels unfamiliar, dangerous, and alive. Your instincts are raw, your body is weak, and every choice from here will shape survival.', '[{\"slot\":1,\"key\":\"observe\",\"text\":\"Scan the darkness\"},{\"slot\":2,\"key\":\"move\",\"text\":\"Blend into the shadows\"},{\"slot\":3,\"key\":\"hide\",\"text\":\"Creep through the undergrowth\"},{\"slot\":4,\"key\":\"rest\",\"text\":\"Attack from the hidden\"}]', NULL, 0, 1, NULL, 'mistralai/Mistral-7B-Instruct-v0.2:featherless-ai', 'AI narration failed', NULL, '2026-04-02 16:26:22', '2026-04-02 16:26:22');
+(3, 1, 5, '2026-04-02 20:49:05', 'Silence Beneath Danger — Tall Grass Hollow', 'You hid and reduced your visibility. Now LightPotato must decide what happens next in Tall Grass Hollow.', '[{\"slot\":1,\"key\":\"observe\",\"text\":\"Scan the darkness\"},{\"slot\":2,\"key\":\"move\",\"text\":\"Move carefully ahead\"},{\"slot\":3,\"key\":\"rest\",\"text\":\"Catch your breath\"},{\"slot\":4,\"key\":\"hide\",\"text\":\"Blend into the shadows\"}]', 'Silence Beneath Danger — Tall Grass Hollow', 'You hid and reduced your visibility. Now LightPotato must decide what happens next in Tall Grass Hollow.', '[{\"slot\":1,\"key\":\"observe\",\"text\":\"Scan the darkness\"},{\"slot\":2,\"key\":\"move\",\"text\":\"Advance quietly\"},{\"slot\":3,\"key\":\"rest\",\"text\":\"Rest momentarily\"},{\"slot\":4,\"key\":\"hide\",\"text\":\"Blend into the shadows\"}]', 'You hid and reduced your visibility.', 0, 1, NULL, 'mistralai/Mistral-7B-Instruct-v0.2:featherless-ai', 'AI narration failed', NULL, '2026-04-02 18:11:42', '2026-04-02 20:49:05');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `player_scene_history`
+--
+
+CREATE TABLE `player_scene_history` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `player_id` int(10) UNSIGNED NOT NULL,
+  `zone_id` int(10) UNSIGNED DEFAULT NULL,
+  `scene_title` varchar(255) NOT NULL,
+  `scene_text` text NOT NULL,
+  `event_summary` text DEFAULT NULL,
+  `chosen_action_key` varchar(100) DEFAULT NULL,
+  `danger_level` varchar(20) NOT NULL DEFAULT 'low',
+  `environment_tag` varchar(100) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `player_scene_history`
+--
+
+INSERT INTO `player_scene_history` (`id`, `player_id`, `zone_id`, `scene_title`, `scene_text`, `event_summary`, `chosen_action_key`, `danger_level`, `environment_tag`, `created_at`) VALUES
+(1, 1, 17, 'A Shift in the Path — Tall Grass Hollow', 'You moved into Tall Grass Hollow. Now LightPotato must decide what happens next in Tall Grass Hollow.', 'You moved within the current area.', 'move', '1', 'wild', '2026-04-02 20:48:14'),
+(2, 1, 17, 'A Shift in the Path — Tall Grass Hollow', 'You moved within the current area. Now LightPotato must decide what happens next in Tall Grass Hollow.', 'You hid and reduced your visibility.', 'hide', '1', 'wild', '2026-04-02 20:49:05');
 
 -- --------------------------------------------------------
 
@@ -175,10 +211,10 @@ CREATE TABLE `player_skills` (
 --
 
 INSERT INTO `player_skills` (`id`, `player_id`, `skill_id`, `skill_level`, `is_unlocked`, `unlock_reason`, `current_cooldown`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, 1, 0, 'Use attack 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 16:26:08'),
-(2, 1, 2, 1, 0, 'Use hide 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 16:26:08'),
-(3, 1, 3, 1, 0, 'Survive 3 days', 0, '2026-04-02 05:47:20', '2026-04-02 16:26:08'),
-(4, 1, 4, 1, 0, 'Use move 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 16:26:08');
+(1, 1, 1, 1, 0, 'Use attack 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 20:48:54'),
+(2, 1, 2, 1, 0, 'Use hide 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 20:48:54'),
+(3, 1, 3, 1, 0, 'Survive 3 days', 0, '2026-04-02 05:47:20', '2026-04-02 20:48:54'),
+(4, 1, 4, 1, 0, 'Use move 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 20:48:54');
 
 -- --------------------------------------------------------
 
@@ -202,7 +238,7 @@ CREATE TABLE `player_traits` (
 --
 
 INSERT INTO `player_traits` (`id`, `player_id`, `aggressive`, `intelligence`, `stealth`, `survival`, `created_at`, `updated_at`) VALUES
-(1, 1, 0, 0, 0, 1, '2026-04-02 05:13:24', '2026-04-02 05:14:30');
+(1, 1, 0, 1, 1, 3, '2026-04-02 05:13:24', '2026-04-02 20:48:54');
 
 -- --------------------------------------------------------
 
@@ -441,6 +477,15 @@ ALTER TABLE `player_scene_ai_cache`
   ADD KEY `idx_player_scene_ai_cache_player` (`player_id`);
 
 --
+-- Indexes for table `player_scene_history`
+--
+ALTER TABLE `player_scene_history`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_player_scene_history_player_id` (`player_id`),
+  ADD KEY `idx_player_scene_history_zone_id` (`zone_id`),
+  ADD KEY `idx_player_scene_history_created_at` (`created_at`);
+
+--
 -- Indexes for table `player_skills`
 --
 ALTER TABLE `player_skills`
@@ -505,31 +550,37 @@ ALTER TABLE `players`
 -- AUTO_INCREMENT for table `player_action_logs`
 --
 ALTER TABLE `player_action_logs`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `player_current_scene`
 --
 ALTER TABLE `player_current_scene`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `player_scene_ai_cache`
 --
 ALTER TABLE `player_scene_ai_cache`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+
+--
+-- AUTO_INCREMENT for table `player_scene_history`
+--
+ALTER TABLE `player_scene_history`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `player_skills`
 --
 ALTER TABLE `player_skills`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=113;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=165;
 
 --
 -- AUTO_INCREMENT for table `player_traits`
 --
 ALTER TABLE `player_traits`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=30;
 
 --
 -- AUTO_INCREMENT for table `races`
@@ -586,6 +637,13 @@ ALTER TABLE `player_current_scene`
 ALTER TABLE `player_scene_ai_cache`
   ADD CONSTRAINT `fk_player_scene_ai_cache_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_player_scene_ai_cache_scene` FOREIGN KEY (`player_scene_id`) REFERENCES `player_current_scene` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `player_scene_history`
+--
+ALTER TABLE `player_scene_history`
+  ADD CONSTRAINT `fk_player_scene_history_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_player_scene_history_zone` FOREIGN KEY (`zone_id`) REFERENCES `zones` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 --
 -- Constraints for table `player_skills`
