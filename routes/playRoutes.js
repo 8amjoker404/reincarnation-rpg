@@ -8,6 +8,38 @@ const {
   saveSceneHistory,
   extractEventSummaryFromActionResult
 } = require("../helpers/sceneHistoryHelper");
+const {
+  getZoneNpcs,
+  getPlayerNpcMemoriesForZone,
+  ensureZoneNpcEncounter
+} = require("../functions/npcEngine");
+
+function buildSceneActions(scene) {
+  if (!scene) return [];
+
+  return [
+    {
+      slot: 1,
+      key: scene.option_1_key || "observe",
+      text: scene.option_1 || "Scan surroundings"
+    },
+    {
+      slot: 2,
+      key: scene.option_2_key || "move",
+      text: scene.option_2 || "Move carefully"
+    },
+    {
+      slot: 3,
+      key: scene.option_3_key || "hide",
+      text: scene.option_3 || "Hide presence"
+    },
+    {
+      slot: 4,
+      key: scene.option_4_key || "rest",
+      text: scene.option_4 || "Recover strength"
+    }
+  ];
+}
 
 // api/start
 router.post("/start", authenticateToken, async (req, res) => {
@@ -31,8 +63,11 @@ router.post("/start", authenticateToken, async (req, res) => {
     // =========================
     const [players] = await connection.query(
       `
-      SELECT * FROM players
-      WHERE user_id = ? AND is_alive = 1
+      SELECT p.*, r.name AS race_name, rs.name AS subtype_name
+      FROM players p
+      LEFT JOIN races r ON p.race_id = r.id
+      LEFT JOIN race_subtypes rs ON p.race_subtype_id = rs.id
+      WHERE p.user_id = ? AND p.is_alive = 1
       LIMIT 1
       `,
       [userId]
@@ -51,23 +86,18 @@ router.post("/start", authenticateToken, async (req, res) => {
     // =========================
     // 2. CHECK IF SCENE EXISTS
     // =========================
-    const [existingScene] = await connection.query(
+    const [existingSceneRows] = await connection.query(
       `
-      SELECT * FROM player_current_scene
+      SELECT *
+      FROM player_current_scene
       WHERE player_id = ?
+      ORDER BY id DESC
       LIMIT 1
       `,
       [player.id]
     );
 
-    if (existingScene.length) {
-      await connection.commit();
-
-      return res.json({
-        success: true,
-        message: "Game already started"
-      });
-    }
+    const existingScene = existingSceneRows[0] || null;
 
     // =========================
     // 3. GET ZONE
@@ -94,18 +124,56 @@ router.post("/start", authenticateToken, async (req, res) => {
         `UPDATE players SET current_zone_id = ? WHERE id = ?`,
         [zone.id, player.id]
       );
+
+      player.current_zone_id = zone.id;
     }
 
     // =========================
-    // 4. CREATE BASE SCENE
+    // 4. IF ALREADY STARTED
+    // =========================
+    if (existingScene) {
+      existingScene.actions = buildSceneActions(existingScene);
+
+      const zoneNpcs = await getZoneNpcs(connection, zone.id);
+      const npcMemories = await getPlayerNpcMemoriesForZone(
+        connection,
+        player.id,
+        zone.id
+      );
+
+      await connection.commit();
+
+      return res.json({
+        success: true,
+        message: "Game already started",
+        data: {
+          player,
+          zone,
+          current_scene: existingScene,
+          npcs: {
+            zone_npcs: zoneNpcs,
+            encountered_npc: null,
+            npc_memory: null,
+            memories: npcMemories
+          },
+          ai: {
+            narration_applied: false,
+            choice_text_applied: false
+          }
+        }
+      });
+    }
+
+    // =========================
+    // 5. CREATE BASE SCENE
     // =========================
     const sceneTitle = `Awakening in ${zone.name}`;
 
-    const sceneText = `${player.character_name} awakens in ${zone.name}.  
+    const sceneText = `${player.character_name} awakens in ${zone.name}.
 The world feels dangerous. You are weak. Survival begins now.`;
 
     // =========================
-    // 5. INSERT SCENE
+    // 6. INSERT SCENE
     // =========================
     await connection.query(
       `
@@ -146,7 +214,7 @@ The world feels dangerous. You are weak. Survival begins now.`;
     );
 
     // =========================
-    // 6. SAVE FIRST SCENE TO HISTORY
+    // 7. SAVE FIRST SCENE TO HISTORY
     // =========================
     await saveSceneHistory(connection, {
       player_id: player.id,
@@ -160,18 +228,65 @@ The world feels dangerous. You are weak. Survival begins now.`;
     });
 
     // =========================
-    // 7. MARK STARTED
+    // 8. MARK STARTED
     // =========================
     await connection.query(
       `UPDATE players SET has_started_scene = 1 WHERE id = ?`,
       [player.id]
     );
 
+    // =========================
+    // 9. FETCH SCENE + NPC STATE
+    // =========================
+    const [createdSceneRows] = await connection.query(
+      `
+      SELECT *
+      FROM player_current_scene
+      WHERE player_id = ?
+      ORDER BY id DESC
+      LIMIT 1
+      `,
+      [player.id]
+    );
+
+    const createdScene = createdSceneRows[0] || null;
+
+    if (createdScene) {
+      createdScene.actions = buildSceneActions(createdScene);
+    }
+
+    const zoneNpcs = await getZoneNpcs(connection, zone.id);
+    const npcEncounter = await ensureZoneNpcEncounter(
+      connection,
+      player.id,
+      zone.id
+    );
+    const npcMemories = await getPlayerNpcMemoriesForZone(
+      connection,
+      player.id,
+      zone.id
+    );
+
     await connection.commit();
 
     return res.json({
       success: true,
-      message: "Game started successfully"
+      message: "Game started successfully",
+      data: {
+        player,
+        zone,
+        current_scene: createdScene,
+        npcs: {
+          zone_npcs: zoneNpcs,
+          encountered_npc: npcEncounter.encountered_npc,
+          npc_memory: npcEncounter.npc_memory,
+          memories: npcMemories
+        },
+        ai: {
+          narration_applied: false,
+          choice_text_applied: false
+        }
+      }
     });
   } catch (error) {
     await connection.rollback();
@@ -220,12 +335,29 @@ router.get("/", authenticateToken, async (req, res) => {
     // =========================
     // 2. GET ZONE
     // =========================
-    const [zones] = await connection.query(
+    let [zones] = await connection.query(
       `SELECT * FROM zones WHERE id = ? LIMIT 1`,
       [player.current_zone_id]
     );
 
-    const zone = zones[0] || null;
+    let zone = zones[0] || null;
+
+    if (!zone) {
+      const [fallback] = await connection.query(
+        `SELECT * FROM zones WHERE is_active = 1 LIMIT 1`
+      );
+
+      zone = fallback[0] || null;
+
+      if (zone) {
+        await connection.query(
+          `UPDATE players SET current_zone_id = ? WHERE id = ?`,
+          [zone.id, player.id]
+        );
+
+        player.current_zone_id = zone.id;
+      }
+    }
 
     // =========================
     // 3. GET CURRENT SCENE
@@ -244,28 +376,7 @@ router.get("/", authenticateToken, async (req, res) => {
     let currentScene = scenes[0] || null;
 
     if (currentScene) {
-      currentScene.actions = [
-        {
-          slot: 1,
-          key: currentScene.option_1_key || "observe",
-          text: currentScene.option_1 || "Scan surroundings"
-        },
-        {
-          slot: 2,
-          key: currentScene.option_2_key || "move",
-          text: currentScene.option_2 || "Move carefully"
-        },
-        {
-          slot: 3,
-          key: currentScene.option_3_key || "hide",
-          text: currentScene.option_3 || "Hide presence"
-        },
-        {
-          slot: 4,
-          key: currentScene.option_4_key || "rest",
-          text: currentScene.option_4 || "Recover strength"
-        }
-      ];
+      currentScene.actions = buildSceneActions(currentScene);
     }
 
     // =========================
@@ -356,6 +467,21 @@ router.get("/", authenticateToken, async (req, res) => {
         };
       });
 
+    // =========================
+    // 8. GET NPC STATE
+    // =========================
+    let zoneNpcs = [];
+    let npcMemories = [];
+
+    if (zone?.id) {
+      zoneNpcs = await getZoneNpcs(connection, zone.id);
+      npcMemories = await getPlayerNpcMemoriesForZone(
+        connection,
+        player.id,
+        zone.id
+      );
+    }
+
     return res.json({
       success: true,
       message: "Current play state fetched successfully",
@@ -366,6 +492,12 @@ router.get("/", authenticateToken, async (req, res) => {
         traits,
         action_logs: actionLogs,
         skills: formattedSkills,
+        npcs: {
+          zone_npcs: zoneNpcs,
+          encountered_npc: null,
+          npc_memory: null,
+          memories: npcMemories
+        },
         ai: {
           narration_applied: false,
           choice_text_applied: false
