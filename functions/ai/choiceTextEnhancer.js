@@ -1,5 +1,3 @@
-// functions/ai/choiceTextEnhancer.js
-
 const { generateWithHuggingFace } = require("./huggingFaceClient");
 const {
   buildPromptMemory,
@@ -63,6 +61,179 @@ function parseChoiceTextResponse(rawText = "") {
   return parts;
 }
 
+function containsAny(text = "", words = []) {
+  const value = String(text || "").toLowerCase();
+  return words.some((word) => value.includes(String(word).toLowerCase()));
+}
+
+function textMatchesActionKey(key, text) {
+  const value = sanitizeText(text).toLowerCase();
+
+  if (!value) {
+    return false;
+  }
+
+  const allowedMap = {
+    observe: [
+      "observe",
+      "scan",
+      "watch",
+      "study",
+      "inspect",
+      "sense",
+      "read",
+      "survey",
+      "look",
+      "search"
+    ],
+    move: [
+      "move",
+      "advance",
+      "step",
+      "go",
+      "slip",
+      "creep",
+      "reposition",
+      "cross",
+      "approach",
+      "push forward",
+      "head"
+    ],
+    hide: [
+      "hide",
+      "blend",
+      "conceal",
+      "cover",
+      "shadow",
+      "stay low",
+      "vanish",
+      "melt",
+      "duck",
+      "keep low"
+    ],
+    rest: [
+      "rest",
+      "recover",
+      "pause",
+      "breathe",
+      "catch your breath",
+      "regain",
+      "heal",
+      "steady yourself",
+      "recover strength",
+      "regather"
+    ],
+    attack: [
+      "attack",
+      "strike",
+      "lunge",
+      "claw",
+      "bite",
+      "ambush",
+      "hit",
+      "slash",
+      "pounce",
+      "rush",
+      "assault"
+    ],
+    use_skill: [
+      "skill",
+      "ability",
+      "technique",
+      "power",
+      "spell",
+      "art",
+      "channel",
+      "cast",
+      "invoke",
+      "activate"
+    ]
+  };
+
+  const blockedMap = {
+    observe: [
+      "attack",
+      "strike",
+      "lunge",
+      "bite",
+      "slash",
+      "rest",
+      "recover",
+      "heal",
+      "hide",
+      "blend",
+      "conceal"
+    ],
+    move: [
+      "attack",
+      "strike",
+      "lunge",
+      "bite",
+      "slash",
+      "rest",
+      "recover",
+      "heal"
+    ],
+    hide: [
+      "attack",
+      "strike",
+      "lunge",
+      "bite",
+      "slash",
+      "rest",
+      "recover",
+      "heal"
+    ],
+    rest: [
+      "attack",
+      "strike",
+      "lunge",
+      "bite",
+      "slash",
+      "ambush",
+      "pounce",
+      "rush",
+      "move",
+      "advance",
+      "creep",
+      "hide",
+      "blend",
+      "conceal"
+    ],
+    attack: [
+      "rest",
+      "recover",
+      "heal",
+      "pause",
+      "catch your breath"
+    ],
+    use_skill: []
+  };
+
+  const allowed = allowedMap[key] || [];
+  const blocked = blockedMap[key] || [];
+
+  const hasAllowed = containsAny(value, allowed);
+  const hasBlocked = containsAny(value, blocked);
+
+  return hasAllowed && !hasBlocked;
+}
+
+function getSafeFallbackText(choice = {}) {
+  const key = String(choice?.key || "").trim().toLowerCase();
+
+  const fallbackMap = {
+    observe: "Scan the darkness",
+    move: "Move carefully",
+    hide: "Blend into the shadows",
+    rest: "Catch your breath",
+    attack: "Strike at the threat",
+    use_skill: "Use a skill"
+  };
+
+  return fallbackMap[key] || choice?.text || "Take action";
+}
+
 function mapEnhancedChoices(originalActions = [], enhancedTexts = []) {
   const base = normalizeChoiceArray(originalActions);
 
@@ -70,10 +241,16 @@ function mapEnhancedChoices(originalActions = [], enhancedTexts = []) {
     return null;
   }
 
-  return base.map((choice, index) => ({
-    key: choice.key,
-    text: sanitizeText(enhancedTexts[index], choice.text)
-  }));
+  return base.map((choice, index) => {
+    const candidateText = sanitizeText(enhancedTexts[index], choice.text);
+
+    return {
+      key: choice.key,
+      text: textMatchesActionKey(choice.key, candidateText)
+        ? candidateText
+        : sanitizeText(choice.text, getSafeFallbackText(choice))
+    };
+  });
 }
 
 async function enhanceChoiceTexts({
@@ -115,7 +292,7 @@ async function enhanceChoiceTexts({
       userPrompt: buildChoiceEnhancerUserPrompt(memory),
       jsonMode: false,
       maxTokens: 120,
-      temperature: 0.3
+      temperature: 0.2
     });
 
     console.log("=== CHOICE ENHANCER RAW RESULT ===");

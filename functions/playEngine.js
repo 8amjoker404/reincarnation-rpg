@@ -17,240 +17,6 @@ const DEFAULT_ACTIONS = [
   { key: "rest", text: "Rest and recover" }
 ];
 
-async function startGameScene(userId) {
-  const connection = await db.getConnection();
-
-  try {
-    await connection.beginTransaction();
-
-    const player = await getAlivePlayerByUserId(connection, userId);
-
-    if (!player) {
-      await connection.rollback();
-      return {
-        status: 404,
-        body: {
-          success: false,
-          message: "No active living player found for this user"
-        }
-      };
-    }
-
-    let currentScene = await getCurrentSceneByPlayerId(connection, player.id);
-
-    if (currentScene) {
-      await syncPlayerSkillsForPlayer(connection, player.id);
-
-      const freshPlayer = await getPlayerById(connection, player.id);
-      const zone = await getResolvedCurrentZone(connection, freshPlayer, currentScene.zone_id);
-      const traits = await getPlayerTraits(connection, player.id);
-      const actionLogs = await getPlayerActionLogs(connection, player.id);
-      const skills = await getPlayerSkillsSummary(connection, player.id);
-      const aiMeta = await getSceneAiMetaBySceneId(connection, currentScene.id);
-
-      await connection.commit();
-
-      return {
-        status: 200,
-        body: {
-          success: true,
-          message: "Current scene already exists",
-          data: {
-            player: formatPlayer(freshPlayer),
-            zone: formatZone(zone),
-            current_scene: formatScene(currentScene),
-            traits: formatTraits(traits),
-            action_logs: actionLogs,
-            skills,
-            ai: aiMeta
-          }
-        }
-      };
-    }
-
-    let zone = await getResolvedCurrentZone(connection, player, player.current_zone_id);
-
-    if (!zone) {
-      zone = await getStarterZone(connection);
-
-      if (!zone) {
-        await connection.rollback();
-        return {
-          status: 500,
-          body: {
-            success: false,
-            message: "No valid starter zone found"
-          }
-        };
-      }
-    }
-
-    if (!player.current_zone_id || Number(player.current_zone_id) !== Number(zone.id)) {
-      await connection.query(
-        `
-          UPDATE players
-          SET current_zone_id = ?
-          WHERE id = ?
-        `,
-        [zone.id, player.id]
-      );
-      player.current_zone_id = zone.id;
-    }
-
-    await syncPlayerSkillsForPlayer(connection, player.id);
-
-    const freshPlayer = await getPlayerById(connection, player.id);
-    const traits = await getPlayerTraits(connection, player.id);
-    const actionLogs = await getPlayerActionLogs(connection, player.id);
-    const skills = await getPlayerSkillsSummary(connection, player.id);
-
-    const starterBaseScene = buildStartupBaseScene({
-      player: freshPlayer,
-      zone
-    });
-
-    const aiPresentation = await buildAiPresentation({
-      player: freshPlayer,
-      zone,
-      scene: starterBaseScene,
-      previousScene: null,
-      actionKey: null,
-      event: null,
-      traits,
-      actionLogs,
-      skills
-    });
-
-    const savedScene = await createSceneFromAiResult(
-      connection,
-      freshPlayer,
-      zone,
-      aiPresentation
-    );
-
-    await upsertSceneAiCache(connection, {
-      playerId: freshPlayer.id,
-      playerSceneId: savedScene.id,
-      sourceSceneUpdatedAt: savedScene.updated_at,
-      baseScene: starterBaseScene,
-      aiResult: aiPresentation
-    });
-
-    await connection.query(
-      `
-        UPDATE players
-        SET has_started_scene = 1
-        WHERE id = ?
-      `,
-      [freshPlayer.id]
-    );
-
-    const finalPlayer = await getPlayerById(connection, freshPlayer.id);
-    const aiMeta = await getSceneAiMetaBySceneId(connection, savedScene.id);
-
-    await connection.commit();
-
-    return {
-      status: 200,
-      body: {
-        success: true,
-        message: "Game started successfully",
-        data: {
-          player: formatPlayer(finalPlayer),
-          zone: formatZone(zone),
-          current_scene: formatScene(savedScene),
-          traits: formatTraits(traits),
-          action_logs: actionLogs,
-          skills,
-          ai: aiMeta
-        }
-      }
-    };
-  } catch (error) {
-    try {
-      await connection.rollback();
-    } catch (_) {}
-
-    return {
-      status: 500,
-      body: {
-        success: false,
-        message: "Failed to start game",
-        error: error.message
-      }
-    };
-  } finally {
-    connection.release();
-  }
-}
-
-async function getCurrentPlayState(userId) {
-  const connection = await db.getConnection();
-
-  try {
-    const player = await getAlivePlayerByUserId(connection, userId);
-
-    if (!player) {
-      return {
-        status: 404,
-        body: {
-          success: false,
-          message: "No active living player found for this user"
-        }
-      };
-    }
-
-    const currentScene = await getCurrentSceneByPlayerId(connection, player.id);
-
-    if (!currentScene) {
-      return {
-        status: 404,
-        body: {
-          success: false,
-          message: "No active scene found. Start the game first."
-        }
-      };
-    }
-
-    await syncPlayerSkillsForPlayer(connection, player.id);
-
-    const freshPlayer = await getPlayerById(connection, player.id);
-    const zone = await getResolvedCurrentZone(connection, freshPlayer, currentScene.zone_id);
-    const traits = await getPlayerTraits(connection, player.id);
-    const actionLogs = await getPlayerActionLogs(connection, player.id);
-    const skills = await getPlayerSkillsSummary(connection, player.id);
-    const aiMeta = await getSceneAiMetaBySceneId(connection, currentScene.id);
-
-    return {
-      status: 200,
-      body: {
-        success: true,
-        message: "Current play state fetched successfully",
-        data: {
-          player: formatPlayer(freshPlayer),
-          zone: formatZone(zone),
-          current_scene: formatScene(currentScene),
-          traits: formatTraits(traits),
-          action_logs: actionLogs,
-          skills,
-          ai: aiMeta
-        }
-      }
-    };
-  } catch (error) {
-    return {
-      status: 500,
-      body: {
-        success: false,
-        message: "Failed to fetch current play state",
-        error: error.message
-      }
-    };
-  } finally {
-    connection.release();
-  }
-}
-
 async function playAction(userId, payload) {
   const connection = await db.getConnection();
 
@@ -308,7 +74,11 @@ async function playAction(userId, payload) {
       };
     }
 
-    let currentZone = await getResolvedCurrentZone(connection, player, currentScene.zone_id);
+    const currentZone = await getResolvedCurrentZone(
+      connection,
+      player,
+      currentScene.zone_id
+    );
 
     if (!currentZone) {
       await connection.rollback();
@@ -360,14 +130,19 @@ async function playAction(userId, payload) {
       resolution?.skillUsage?.cooldown_turns || 0
     );
 
-    const nextZone = await resolveNextZone(connection, resolution, currentZone, updatedPlayer);
+    const nextZone = await resolveNextZone(
+      connection,
+      resolution,
+      currentZone,
+      updatedPlayer
+    );
 
     if (Number(updatedPlayer.current_zone_id || 0) !== Number(nextZone.id)) {
       await connection.query(
         `
-          UPDATE players
-          SET current_zone_id = ?
-          WHERE id = ?
+        UPDATE players
+        SET current_zone_id = ?
+        WHERE id = ?
         `,
         [nextZone.id, updatedPlayer.id]
       );
@@ -456,47 +231,43 @@ async function playAction(userId, payload) {
   }
 }
 
-/**
- * Required helper:
- * Takes AI output and writes the playable scene into player_current_scene.
- */
 async function createSceneFromAiResult(connection, player, zone, aiPresentation) {
   const finalScene = sanitizeSceneForStorage(aiPresentation?.scene, zone);
 
-  const [result] = await connection.query(
+  await connection.query(
     `
-      INSERT INTO player_current_scene (
-        player_id,
-        zone_id,
-        scene_title,
-        scene_text,
-        environment_tag,
-        danger_level,
-        option_1,
-        option_1_key,
-        option_2,
-        option_2_key,
-        option_3,
-        option_3_key,
-        option_4,
-        option_4_key
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE
-        zone_id = VALUES(zone_id),
-        scene_title = VALUES(scene_title),
-        scene_text = VALUES(scene_text),
-        environment_tag = VALUES(environment_tag),
-        danger_level = VALUES(danger_level),
-        option_1 = VALUES(option_1),
-        option_1_key = VALUES(option_1_key),
-        option_2 = VALUES(option_2),
-        option_2_key = VALUES(option_2_key),
-        option_3 = VALUES(option_3),
-        option_3_key = VALUES(option_3_key),
-        option_4 = VALUES(option_4),
-        option_4_key = VALUES(option_4_key),
-        updated_at = CURRENT_TIMESTAMP
+    INSERT INTO player_current_scene (
+      player_id,
+      zone_id,
+      scene_title,
+      scene_text,
+      environment_tag,
+      danger_level,
+      option_1,
+      option_1_key,
+      option_2,
+      option_2_key,
+      option_3,
+      option_3_key,
+      option_4,
+      option_4_key
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      zone_id = VALUES(zone_id),
+      scene_title = VALUES(scene_title),
+      scene_text = VALUES(scene_text),
+      environment_tag = VALUES(environment_tag),
+      danger_level = VALUES(danger_level),
+      option_1 = VALUES(option_1),
+      option_1_key = VALUES(option_1_key),
+      option_2 = VALUES(option_2),
+      option_2_key = VALUES(option_2_key),
+      option_3 = VALUES(option_3),
+      option_3_key = VALUES(option_3_key),
+      option_4 = VALUES(option_4),
+      option_4_key = VALUES(option_4_key),
+      updated_at = CURRENT_TIMESTAMP
     `,
     [
       player.id,
@@ -515,13 +286,6 @@ async function createSceneFromAiResult(connection, player, zone, aiPresentation)
       finalScene.actions[3].key
     ]
   );
-
-  let sceneId = result.insertId;
-
-  if (!sceneId) {
-    const existing = await getCurrentSceneByPlayerId(connection, player.id);
-    sceneId = existing?.id || null;
-  }
 
   const savedScene = await getCurrentSceneByPlayerId(connection, player.id);
 
@@ -675,24 +439,6 @@ async function safeEnhanceChoiceTexts(payload) {
   }
 }
 
-function buildStartupBaseScene({ player, zone }) {
-  const raceName = player.subtype_name || player.race_name || "creature";
-
-  return sanitizeSceneForStorage(
-    {
-      scene_title: `Awakening in ${zone.name}`,
-      scene_text:
-        `${player.character_name || "You"} awaken as a ${raceName} in ${zone.name}. ` +
-        `The world feels unfamiliar, dangerous, and alive. ` +
-        `Your instincts are raw, your body is weak, and every choice from here will shape survival.`,
-      environment_tag: zone.environment_tag || zone.zone_type || "wild",
-      danger_level: normalizeDangerLevel(zone.difficulty_level),
-      actions: DEFAULT_ACTIONS
-    },
-    zone
-  );
-}
-
 function buildContinuationBaseScene({
   previousScene,
   player,
@@ -787,28 +533,28 @@ async function applyPlayerChanges(connection, player, resolution) {
 
   await connection.query(
     `
-      UPDATE players
-      SET
-        hp = ?,
-        max_hp = ?,
-        energy = ?,
-        max_energy = ?,
-        hunger = ?,
-        level = ?,
-        year_survived = ?,
-        day_survived = ?,
-        current_hour = ?,
-        age_days = ?,
-        attack_stat = ?,
-        defense_stat = ?,
-        speed_stat = ?,
-        intelligence_stat = ?,
-        evolution_stage = ?,
-        title = ?,
-        alignment_type = ?,
-        current_zone_id = ?,
-        is_alive = ?
-      WHERE id = ?
+    UPDATE players
+    SET
+      hp = ?,
+      max_hp = ?,
+      energy = ?,
+      max_energy = ?,
+      hunger = ?,
+      level = ?,
+      year_survived = ?,
+      day_survived = ?,
+      current_hour = ?,
+      age_days = ?,
+      attack_stat = ?,
+      defense_stat = ?,
+      speed_stat = ?,
+      intelligence_stat = ?,
+      evolution_stage = ?,
+      title = ?,
+      alignment_type = ?,
+      current_zone_id = ?,
+      is_alive = ?
+    WHERE id = ?
     `,
     [
       safeNumber(mergedPlayer.hp, player.hp),
@@ -850,16 +596,16 @@ async function applyPlayerChanges(connection, player, resolution) {
 async function ensurePlayerTraitsRow(connection, playerId) {
   await connection.query(
     `
-      INSERT INTO player_traits (
-        player_id,
-        aggressive,
-        intelligence,
-        stealth,
-        survival
-      )
-      VALUES (?, 0, 0, 0, 0)
-      ON DUPLICATE KEY UPDATE
-        player_id = VALUES(player_id)
+    INSERT INTO player_traits (
+      player_id,
+      aggressive,
+      intelligence,
+      stealth,
+      survival
+    )
+    VALUES (?, 0, 0, 0, 0)
+    ON DUPLICATE KEY UPDATE
+      player_id = VALUES(player_id)
     `,
     [playerId]
   );
@@ -868,10 +614,10 @@ async function ensurePlayerTraitsRow(connection, playerId) {
 async function logPlayerAction(connection, playerId, actionKey) {
   await connection.query(
     `
-      INSERT INTO player_action_logs (player_id, action_key, count)
-      VALUES (?, ?, 1)
-      ON DUPLICATE KEY UPDATE
-        count = count + 1
+    INSERT INTO player_action_logs (player_id, action_key, count)
+    VALUES (?, ?, 1)
+    ON DUPLICATE KEY UPDATE
+      count = count + 1
     `,
     [playerId, actionKey]
   );
@@ -885,13 +631,13 @@ async function applyTraitGrowth(connection, playerId, traitChanges) {
 
   await connection.query(
     `
-      UPDATE player_traits
-      SET
-        aggressive = aggressive + ?,
-        intelligence = intelligence + ?,
-        stealth = stealth + ?,
-        survival = survival + ?
-      WHERE player_id = ?
+    UPDATE player_traits
+    SET
+      aggressive = aggressive + ?,
+      intelligence = intelligence + ?,
+      stealth = stealth + ?,
+      survival = survival + ?
+    WHERE player_id = ?
     `,
     [aggressive, intelligence, stealth, survival, playerId]
   );
@@ -900,43 +646,43 @@ async function applyTraitGrowth(connection, playerId, traitChanges) {
 async function getAlivePlayerByUserId(connection, userId) {
   const [rows] = await connection.query(
     `
-      SELECT
-        p.id,
-        p.user_id,
-        p.life_number,
-        p.character_name,
-        p.race_id,
-        p.race_subtype_id,
-        p.level,
-        p.year_survived,
-        p.day_survived,
-        p.current_hour,
-        p.age_days,
-        p.hp,
-        p.max_hp,
-        p.energy,
-        p.max_energy,
-        p.hunger,
-        p.attack_stat,
-        p.defense_stat,
-        p.speed_stat,
-        p.intelligence_stat,
-        p.evolution_stage,
-        p.title,
-        p.alignment_type,
-        p.current_zone_id,
-        p.has_started_scene,
-        p.is_alive,
-        r.name AS race_name,
-        r.description AS race_description,
-        rs.name AS subtype_name,
-        rs.description AS subtype_description
-      FROM players p
-      INNER JOIN races r ON r.id = p.race_id
-      INNER JOIN race_subtypes rs ON rs.id = p.race_subtype_id
-      WHERE p.user_id = ? AND p.is_alive = 1
-      ORDER BY p.id DESC
-      LIMIT 1
+    SELECT
+      p.id,
+      p.user_id,
+      p.life_number,
+      p.character_name,
+      p.race_id,
+      p.race_subtype_id,
+      p.level,
+      p.year_survived,
+      p.day_survived,
+      p.current_hour,
+      p.age_days,
+      p.hp,
+      p.max_hp,
+      p.energy,
+      p.max_energy,
+      p.hunger,
+      p.attack_stat,
+      p.defense_stat,
+      p.speed_stat,
+      p.intelligence_stat,
+      p.evolution_stage,
+      p.title,
+      p.alignment_type,
+      p.current_zone_id,
+      p.has_started_scene,
+      p.is_alive,
+      r.name AS race_name,
+      r.description AS race_description,
+      rs.name AS subtype_name,
+      rs.description AS subtype_description
+    FROM players p
+    INNER JOIN races r ON r.id = p.race_id
+    INNER JOIN race_subtypes rs ON rs.id = p.race_subtype_id
+    WHERE p.user_id = ? AND p.is_alive = 1
+    ORDER BY p.id DESC
+    LIMIT 1
     `,
     [userId]
   );
@@ -947,42 +693,42 @@ async function getAlivePlayerByUserId(connection, userId) {
 async function getPlayerById(connection, playerId) {
   const [rows] = await connection.query(
     `
-      SELECT
-        p.id,
-        p.user_id,
-        p.life_number,
-        p.character_name,
-        p.race_id,
-        p.race_subtype_id,
-        p.level,
-        p.year_survived,
-        p.day_survived,
-        p.current_hour,
-        p.age_days,
-        p.hp,
-        p.max_hp,
-        p.energy,
-        p.max_energy,
-        p.hunger,
-        p.attack_stat,
-        p.defense_stat,
-        p.speed_stat,
-        p.intelligence_stat,
-        p.evolution_stage,
-        p.title,
-        p.alignment_type,
-        p.current_zone_id,
-        p.has_started_scene,
-        p.is_alive,
-        r.name AS race_name,
-        r.description AS race_description,
-        rs.name AS subtype_name,
-        rs.description AS subtype_description
-      FROM players p
-      INNER JOIN races r ON r.id = p.race_id
-      INNER JOIN race_subtypes rs ON rs.id = p.race_subtype_id
-      WHERE p.id = ?
-      LIMIT 1
+    SELECT
+      p.id,
+      p.user_id,
+      p.life_number,
+      p.character_name,
+      p.race_id,
+      p.race_subtype_id,
+      p.level,
+      p.year_survived,
+      p.day_survived,
+      p.current_hour,
+      p.age_days,
+      p.hp,
+      p.max_hp,
+      p.energy,
+      p.max_energy,
+      p.hunger,
+      p.attack_stat,
+      p.defense_stat,
+      p.speed_stat,
+      p.intelligence_stat,
+      p.evolution_stage,
+      p.title,
+      p.alignment_type,
+      p.current_zone_id,
+      p.has_started_scene,
+      p.is_alive,
+      r.name AS race_name,
+      r.description AS race_description,
+      rs.name AS subtype_name,
+      rs.description AS subtype_description
+    FROM players p
+    INNER JOIN races r ON r.id = p.race_id
+    INNER JOIN race_subtypes rs ON rs.id = p.race_subtype_id
+    WHERE p.id = ?
+    LIMIT 1
     `,
     [playerId]
   );
@@ -993,67 +739,23 @@ async function getPlayerById(connection, playerId) {
 async function getZoneById(connection, zoneId) {
   const [rows] = await connection.query(
     `
-      SELECT
-        id,
-        name,
-        zone_type,
-        difficulty_level,
-        environment_tag,
-        description,
-        is_safe_zone,
-        parent_zone_id
-      FROM zones
-      WHERE id = ? AND is_active = 1
-      LIMIT 1
+    SELECT
+      id,
+      name,
+      zone_type,
+      difficulty_level,
+      environment_tag,
+      description,
+      is_safe_zone,
+      parent_zone_id
+    FROM zones
+    WHERE id = ? AND is_active = 1
+    LIMIT 1
     `,
     [zoneId]
   );
 
   return rows[0] || null;
-}
-
-async function getStarterZone(connection) {
-  const [safeRows] = await connection.query(
-    `
-      SELECT
-        id,
-        name,
-        zone_type,
-        difficulty_level,
-        environment_tag,
-        description,
-        is_safe_zone,
-        parent_zone_id
-      FROM zones
-      WHERE is_active = 1 AND is_safe_zone = 1
-      ORDER BY id ASC
-      LIMIT 1
-    `
-  );
-
-  if (safeRows.length) {
-    return safeRows[0];
-  }
-
-  const [fallbackRows] = await connection.query(
-    `
-      SELECT
-        id,
-        name,
-        zone_type,
-        difficulty_level,
-        environment_tag,
-        description,
-        is_safe_zone,
-        parent_zone_id
-      FROM zones
-      WHERE is_active = 1
-      ORDER BY id ASC
-      LIMIT 1
-    `
-  );
-
-  return fallbackRows[0] || null;
 }
 
 async function getResolvedCurrentZone(connection, player, fallbackZoneId = null) {
@@ -1077,27 +779,27 @@ async function getResolvedCurrentZone(connection, player, fallbackZoneId = null)
 async function getCurrentSceneByPlayerId(connection, playerId) {
   const [rows] = await connection.query(
     `
-      SELECT
-        id,
-        player_id,
-        zone_id,
-        scene_title,
-        scene_text,
-        environment_tag,
-        danger_level,
-        option_1,
-        option_1_key,
-        option_2,
-        option_2_key,
-        option_3,
-        option_3_key,
-        option_4,
-        option_4_key,
-        created_at,
-        updated_at
-      FROM player_current_scene
-      WHERE player_id = ?
-      LIMIT 1
+    SELECT
+      id,
+      player_id,
+      zone_id,
+      scene_title,
+      scene_text,
+      environment_tag,
+      danger_level,
+      option_1,
+      option_1_key,
+      option_2,
+      option_2_key,
+      option_3,
+      option_3_key,
+      option_4,
+      option_4_key,
+      created_at,
+      updated_at
+    FROM player_current_scene
+    WHERE player_id = ?
+    LIMIT 1
     `,
     [playerId]
   );
@@ -1108,15 +810,15 @@ async function getCurrentSceneByPlayerId(connection, playerId) {
 async function getPlayerTraits(connection, playerId) {
   const [rows] = await connection.query(
     `
-      SELECT
-        player_id,
-        aggressive,
-        intelligence,
-        stealth,
-        survival
-      FROM player_traits
-      WHERE player_id = ?
-      LIMIT 1
+    SELECT
+      player_id,
+      aggressive,
+      intelligence,
+      stealth,
+      survival
+    FROM player_traits
+    WHERE player_id = ?
+    LIMIT 1
     `,
     [playerId]
   );
@@ -1137,10 +839,10 @@ async function getPlayerTraits(connection, playerId) {
 async function getPlayerActionLogs(connection, playerId) {
   const [rows] = await connection.query(
     `
-      SELECT action_key, count
-      FROM player_action_logs
-      WHERE player_id = ?
-      ORDER BY action_key ASC
+    SELECT action_key, count
+    FROM player_action_logs
+    WHERE player_id = ?
+    ORDER BY action_key ASC
     `,
     [playerId]
   );
@@ -1151,17 +853,17 @@ async function getPlayerActionLogs(connection, playerId) {
 async function getSceneAiMetaBySceneId(connection, playerSceneId) {
   const [rows] = await connection.query(
     `
-      SELECT
-        narration_applied,
-        choice_text_applied,
-        narration_model,
-        choice_model,
-        narration_error,
-        choice_error,
-        ai_event_summary
-      FROM player_scene_ai_cache
-      WHERE player_scene_id = ?
-      LIMIT 1
+    SELECT
+      narration_applied,
+      choice_text_applied,
+      narration_model,
+      choice_model,
+      narration_error,
+      choice_error,
+      ai_event_summary
+    FROM player_scene_ai_cache
+    WHERE player_scene_id = ?
+    LIMIT 1
     `,
     [playerSceneId]
   );
@@ -1203,42 +905,42 @@ async function upsertSceneAiCache(
 
   await connection.query(
     `
-      INSERT INTO player_scene_ai_cache (
-        player_id,
-        player_scene_id,
-        source_scene_updated_at,
-        raw_scene_title,
-        raw_scene_text,
-        raw_actions_json,
-        ai_scene_title,
-        ai_scene_text,
-        ai_actions_json,
-        ai_event_summary,
-        narration_applied,
-        choice_text_applied,
-        narration_model,
-        choice_model,
-        narration_error,
-        choice_error
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE
-        player_id = VALUES(player_id),
-        source_scene_updated_at = VALUES(source_scene_updated_at),
-        raw_scene_title = VALUES(raw_scene_title),
-        raw_scene_text = VALUES(raw_scene_text),
-        raw_actions_json = VALUES(raw_actions_json),
-        ai_scene_title = VALUES(ai_scene_title),
-        ai_scene_text = VALUES(ai_scene_text),
-        ai_actions_json = VALUES(ai_actions_json),
-        ai_event_summary = VALUES(ai_event_summary),
-        narration_applied = VALUES(narration_applied),
-        choice_text_applied = VALUES(choice_text_applied),
-        narration_model = VALUES(narration_model),
-        choice_model = VALUES(choice_model),
-        narration_error = VALUES(narration_error),
-        choice_error = VALUES(choice_error),
-        updated_at = CURRENT_TIMESTAMP
+    INSERT INTO player_scene_ai_cache (
+      player_id,
+      player_scene_id,
+      source_scene_updated_at,
+      raw_scene_title,
+      raw_scene_text,
+      raw_actions_json,
+      ai_scene_title,
+      ai_scene_text,
+      ai_actions_json,
+      ai_event_summary,
+      narration_applied,
+      choice_text_applied,
+      narration_model,
+      choice_model,
+      narration_error,
+      choice_error
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      player_id = VALUES(player_id),
+      source_scene_updated_at = VALUES(source_scene_updated_at),
+      raw_scene_title = VALUES(raw_scene_title),
+      raw_scene_text = VALUES(raw_scene_text),
+      raw_actions_json = VALUES(raw_actions_json),
+      ai_scene_title = VALUES(ai_scene_title),
+      ai_scene_text = VALUES(ai_scene_text),
+      ai_actions_json = VALUES(ai_actions_json),
+      ai_event_summary = VALUES(ai_event_summary),
+      narration_applied = VALUES(narration_applied),
+      choice_text_applied = VALUES(choice_text_applied),
+      narration_model = VALUES(narration_model),
+      choice_model = VALUES(choice_model),
+      narration_error = VALUES(narration_error),
+      choice_error = VALUES(choice_error),
+      updated_at = CURRENT_TIMESTAMP
     `,
     [
       playerId,
@@ -1273,19 +975,22 @@ function sanitizeSceneForStorage(scene, zone) {
       cleanString(zone?.environment_tag) ||
       cleanString(zone?.zone_type) ||
       "wild",
-    danger_level: normalizeDangerLevel(scene?.danger_level || zone?.difficulty_level),
+    danger_level: normalizeDangerLevel(
+      scene?.danger_level || zone?.difficulty_level
+    ),
     actions
   };
 }
 
 function normalizeActions(actions) {
   const normalized = Array.isArray(actions) ? actions : [];
-
   const finalActions = [];
 
   for (let i = 0; i < 4; i += 1) {
     const raw = normalized[i] || DEFAULT_ACTIONS[i] || DEFAULT_ACTIONS[0];
-    const key = normalizeActionKey(raw.key || raw.action_key || DEFAULT_ACTIONS[i].key);
+    const key = normalizeActionKey(
+      raw.key || raw.action_key || DEFAULT_ACTIONS[i].key
+    );
 
     finalActions.push({
       slot: i + 1,
@@ -1306,7 +1011,7 @@ function normalizeActionKey(key) {
     return normalized;
   }
 
-  return DEFAULT_ACTIONS.find((item) => item.key === normalized)?.key || "observe";
+  return "observe";
 }
 
 function getDefaultActionText(actionKey) {
@@ -1447,13 +1152,5 @@ function safeNumber(value, fallback = 0) {
 }
 
 module.exports = {
-  startGameScene,
-  getCurrentPlayState,
-  playAction,
-  createSceneFromAiResult,
-  getAlivePlayerByUserId,
-  getPlayerById,
-  getZoneById,
-  getStarterZone,
-  getCurrentSceneByPlayerId
+  playAction
 };

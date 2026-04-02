@@ -1,5 +1,3 @@
-// functions/ai/promptMemoryBuilder.js
-
 function normalizeActionLogs(actionLogs = []) {
   return Array.isArray(actionLogs)
     ? actionLogs.slice(0, 10).map((log) => ({
@@ -159,6 +157,15 @@ Use this exact separator between each rewritten choice: ||
 Rules:
 - Return exactly 4 rewritten choice texts
 - Keep the exact same order as the input choices
+- Keep each rewritten text semantically faithful to its action key
+- Never change the meaning of the action
+- Never turn a non-attack action into an attack-sounding action
+- Never turn rest into attack, move, hide, or observe
+- Never turn hide into attack, move, rest, or observe
+- Never turn move into rest, hide, attack, or observe
+- Never turn observe into move, hide, rest, or attack
+- Never turn use_skill into a normal physical action
+- If a choice key is use_skill, the text must clearly sound like using a learned ability or special power
 - Do not add numbering
 - Do not add bullets
 - Do not add labels
@@ -168,6 +175,14 @@ Rules:
 - Each choice text should be about 2 to 5 words
 - Do not return JSON
 - Do not repeat the separator more than needed
+
+Action key meaning guide:
+- observe = inspect, scan, study, watch, sense danger
+- move = advance, reposition, creep forward, slip away, head deeper
+- hide = conceal yourself, blend in, stay low, melt into cover
+- rest = recover, catch breath, steady yourself, regain strength
+- attack = strike, ambush, lunge, slash, rush the threat
+- use_skill = activate a learned ability, channel power, cast a technique
 
 Input choices:
 ${JSON.stringify(actions, null, 2)}
@@ -189,7 +204,7 @@ ${JSON.stringify(
 )}
 
 Output example:
-Scan the shadows || Slip into cover || Creep through the grass || Strike without warning
+Scan the darkness || Move carefully ahead || Blend into the shadows || Catch your breath
   `.trim();
 }
 
