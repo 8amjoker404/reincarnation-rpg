@@ -76,11 +76,7 @@ async function getCurrentPlayState(userId) {
     const skills = await getPlayerSkillsSummary(connection, player.id);
     const freshPlayer = await getPlayerById(connection, player.id);
 
-    const formattedPlayer = formatPlayer(freshPlayer);
-    const formattedZone = formatZone(zone);
-    const formattedTraits = formatTraits(traits);
-
-    const enhanced = await buildEnhancedPlayPresentation({
+    const presentation = await ensureScenePresentationCached(connection, {
       player: freshPlayer,
       zone,
       scene: currentScene,
@@ -96,13 +92,13 @@ async function getCurrentPlayState(userId) {
         success: true,
         message: "Current play state fetched successfully",
         data: {
-          player: formattedPlayer,
-          zone: formattedZone,
-          current_scene: enhanced.scene,
-          traits: formattedTraits,
+          player: formatPlayer(freshPlayer),
+          zone: formatZone(zone),
+          current_scene: presentation.scene,
+          traits: formatTraits(traits),
           action_logs: actionLogs,
           skills,
-          ai: enhanced.ai
+          ai: presentation.ai
         }
       }
     };
@@ -223,6 +219,7 @@ async function playAction(userId, payload) {
 
     await ensurePlayerTraitsRow(connection, updatedPlayer.id);
     await logPlayerAction(connection, updatedPlayer.id, actionKey);
+
     await applyTraitGrowth(
       connection,
       updatedPlayer.id,
@@ -255,7 +252,7 @@ async function playAction(userId, payload) {
     const actionLogs = await getPlayerActionLogs(connection, updatedPlayer.id);
     const skills = await getPlayerSkillsSummary(connection, updatedPlayer.id);
 
-    const enhanced = await buildEnhancedPlayPresentation({
+    const presentation = await ensureScenePresentationCached(connection, {
       player: finalPlayer,
       zone: finalZone,
       scene: savedScene,
@@ -271,21 +268,21 @@ async function playAction(userId, payload) {
         success: true,
         message: "Action resolved successfully",
         data: {
-          event: enhanced.event,
+          event: presentation.event,
           player: formatPlayer(finalPlayer),
           zone: formatZone(finalZone),
-          current_scene: enhanced.scene,
+          current_scene: presentation.scene,
           traits: formatTraits(traits),
           action_logs: actionLogs,
           skills,
-          ai: enhanced.ai
+          ai: presentation.ai
         }
       }
     };
   } catch (error) {
     try {
       await connection.rollback();
-    } catch {}
+    } catch (_) {}
 
     return {
       status: 500,
@@ -300,7 +297,44 @@ async function playAction(userId, payload) {
   }
 }
 
-async function buildEnhancedPlayPresentation({
+async function ensureScenePresentationCached(
+  connection,
+  { player, zone, scene, event = null, actionLogs = [], traits = null, skills = [] }
+) {
+  const baseScene = formatScene(scene);
+  const existingCache = await getSceneAiCacheBySceneId(connection, scene.id);
+
+  const sceneUpdatedAt = normalizeDateTime(scene.updated_at);
+
+  if (
+    existingCache &&
+    normalizeDateTime(existingCache.source_scene_updated_at) === sceneUpdatedAt
+  ) {
+    return buildPresentationFromCache(baseScene, event, existingCache);
+  }
+
+  const aiResult = await generateSceneAiPresentation({
+    player,
+    zone,
+    scene: baseScene,
+    event,
+    actionLogs,
+    traits,
+    skills
+  });
+
+  await upsertSceneAiCache(connection, {
+    playerId: player.id,
+    playerSceneId: scene.id,
+    sourceSceneUpdatedAt: scene.updated_at,
+    baseScene,
+    aiResult
+  });
+
+  return aiResult;
+}
+
+async function generateSceneAiPresentation({
   player,
   zone,
   scene,
@@ -309,13 +343,12 @@ async function buildEnhancedPlayPresentation({
   traits = null,
   skills = []
 }) {
-  const baseScene = formatScene(scene);
   const baseEvent = event ? { ...event } : null;
 
   const narrationResult = await narrateScene({
     player,
     zone,
-    scene: baseScene,
+    scene,
     event: baseEvent,
     actionLogs,
     traits,
@@ -325,7 +358,7 @@ async function buildEnhancedPlayPresentation({
   const choiceResult = await enhanceChoiceTexts({
     player,
     zone,
-    scene: baseScene,
+    scene,
     event: baseEvent,
     actionLogs,
     traits,
@@ -333,20 +366,21 @@ async function buildEnhancedPlayPresentation({
   });
 
   const finalScene = {
-    ...baseScene,
-    actions: Array.isArray(baseScene.actions) ? [...baseScene.actions] : []
+    ...scene,
+    actions: Array.isArray(scene.actions) ? [...scene.actions] : []
   };
 
   if (narrationResult.ok) {
-    finalScene.scene_title = narrationResult.data.scene_title || finalScene.scene_title;
-    finalScene.scene_text = narrationResult.data.scene_text || finalScene.scene_text;
+    finalScene.scene_title =
+      narrationResult.data.scene_title || finalScene.scene_title;
+    finalScene.scene_text =
+      narrationResult.data.scene_text || finalScene.scene_text;
   }
 
-  if (choiceResult.ok && Array.isArray(choiceResult.data) && choiceResult.data.length === 4) {
+  if (choiceResult.ok && Array.isArray(choiceResult.data)) {
     finalScene.actions = finalScene.actions.map((action, index) => ({
       ...action,
-      text: choiceResult.data[index]?.text || action.text,
-      key: choiceResult.data[index]?.key || action.key
+      text: choiceResult.data[index]?.text || action.text
     }));
   }
 
@@ -360,18 +394,167 @@ async function buildEnhancedPlayPresentation({
       }
     : null;
 
+  const sceneWithChoices = addChoiceDisplayFields(finalScene);
+
   return {
-    scene: addChoiceDisplayFields(finalScene),
+    scene: sceneWithChoices,
     event: finalEvent,
     ai: {
       narration_applied: narrationResult.ok,
       choice_text_applied: choiceResult.ok,
       narration_model: narrationResult.ok ? narrationResult.model : null,
       choice_model: choiceResult.ok ? choiceResult.model : null,
-      narration_error: narrationResult.ok ? null : narrationResult.reason,
-      choice_error: choiceResult.ok ? null : choiceResult.reason
+      narration_error: narrationResult.ok ? null : narrationResult.reason || null,
+      choice_error: choiceResult.ok ? null : choiceResult.reason || null
     }
   };
+}
+
+async function getSceneAiCacheBySceneId(connection, playerSceneId) {
+  const [rows] = await connection.query(
+    `
+      SELECT
+        id,
+        player_id,
+        player_scene_id,
+        source_scene_updated_at,
+        raw_scene_title,
+        raw_scene_text,
+        raw_actions_json,
+        ai_scene_title,
+        ai_scene_text,
+        ai_actions_json,
+        ai_event_summary,
+        narration_applied,
+        choice_text_applied,
+        narration_model,
+        choice_model,
+        narration_error,
+        choice_error,
+        created_at,
+        updated_at
+      FROM player_scene_ai_cache
+      WHERE player_scene_id = ?
+      LIMIT 1
+    `,
+    [playerSceneId]
+  );
+
+  return rows[0] || null;
+}
+
+async function upsertSceneAiCache(
+  connection,
+  { playerId, playerSceneId, sourceSceneUpdatedAt, baseScene, aiResult }
+) {
+  const rawActionsJson = JSON.stringify(baseScene.actions || []);
+  const aiActionsJson = JSON.stringify(aiResult.scene.actions || []);
+
+  await connection.query(
+    `
+      INSERT INTO player_scene_ai_cache (
+        player_id,
+        player_scene_id,
+        source_scene_updated_at,
+        raw_scene_title,
+        raw_scene_text,
+        raw_actions_json,
+        ai_scene_title,
+        ai_scene_text,
+        ai_actions_json,
+        ai_event_summary,
+        narration_applied,
+        choice_text_applied,
+        narration_model,
+        choice_model,
+        narration_error,
+        choice_error
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        player_id = VALUES(player_id),
+        source_scene_updated_at = VALUES(source_scene_updated_at),
+        raw_scene_title = VALUES(raw_scene_title),
+        raw_scene_text = VALUES(raw_scene_text),
+        raw_actions_json = VALUES(raw_actions_json),
+        ai_scene_title = VALUES(ai_scene_title),
+        ai_scene_text = VALUES(ai_scene_text),
+        ai_actions_json = VALUES(ai_actions_json),
+        ai_event_summary = VALUES(ai_event_summary),
+        narration_applied = VALUES(narration_applied),
+        choice_text_applied = VALUES(choice_text_applied),
+        narration_model = VALUES(narration_model),
+        choice_model = VALUES(choice_model),
+        narration_error = VALUES(narration_error),
+        choice_error = VALUES(choice_error),
+        updated_at = CURRENT_TIMESTAMP
+    `,
+    [
+      playerId,
+      playerSceneId,
+      sourceSceneUpdatedAt || null,
+      baseScene.scene_title || null,
+      baseScene.scene_text || null,
+      rawActionsJson,
+      aiResult.scene.scene_title || null,
+      aiResult.scene.scene_text || null,
+      aiActionsJson,
+      aiResult.event?.summary || null,
+      aiResult.ai.narration_applied ? 1 : 0,
+      aiResult.ai.choice_text_applied ? 1 : 0,
+      aiResult.ai.narration_model || null,
+      aiResult.ai.choice_model || null,
+      aiResult.ai.narration_error || null,
+      aiResult.ai.choice_error || null
+    ]
+  );
+}
+
+function buildPresentationFromCache(baseScene, event, cacheRow) {
+  let aiActions = baseScene.actions || [];
+
+  try {
+    const parsed = JSON.parse(cacheRow.ai_actions_json || "[]");
+    if (Array.isArray(parsed) && parsed.length === 4) {
+      aiActions = parsed.map((item, index) => ({
+        slot: index + 1,
+        key: String(item?.key || baseScene.actions[index]?.key || "").trim().toLowerCase(),
+        text: String(item?.text || baseScene.actions[index]?.text || "").trim()
+      }));
+    }
+  } catch (_) {}
+
+  const finalScene = addChoiceDisplayFields({
+    ...baseScene,
+    scene_title: cacheRow.ai_scene_title || baseScene.scene_title,
+    scene_text: cacheRow.ai_scene_text || baseScene.scene_text,
+    actions: aiActions
+  });
+
+  const finalEvent = event
+    ? {
+        ...event,
+        summary: cacheRow.ai_event_summary || event.summary
+      }
+    : null;
+
+  return {
+    scene: finalScene,
+    event: finalEvent,
+    ai: {
+      narration_applied: Number(cacheRow.narration_applied || 0) === 1,
+      choice_text_applied: Number(cacheRow.choice_text_applied || 0) === 1,
+      narration_model: cacheRow.narration_model || null,
+      choice_model: cacheRow.choice_model || null,
+      narration_error: cacheRow.narration_error || null,
+      choice_error: cacheRow.choice_error || null
+    }
+  };
+}
+
+function normalizeDateTime(value) {
+  if (!value) return null;
+  return new Date(value).toISOString();
 }
 
 async function getAlivePlayerByUserId(connection, userId) {
@@ -410,8 +593,7 @@ async function getAlivePlayerByUserId(connection, userId) {
       FROM players p
       INNER JOIN races r ON r.id = p.race_id
       INNER JOIN race_subtypes rs ON rs.id = p.race_subtype_id
-      WHERE p.user_id = ?
-        AND p.is_alive = 1
+      WHERE p.user_id = ? AND p.is_alive = 1
       ORDER BY p.id DESC
       LIMIT 1
     `,
@@ -479,8 +661,7 @@ async function getZoneById(connection, zoneId) {
         is_safe_zone,
         parent_zone_id
       FROM zones
-      WHERE id = ?
-        AND is_active = 1
+      WHERE id = ? AND is_active = 1
       LIMIT 1
     `,
     [zoneId]
@@ -502,8 +683,7 @@ async function getStarterZone(connection) {
         is_safe_zone,
         parent_zone_id
       FROM zones
-      WHERE is_active = 1
-        AND is_safe_zone = 1
+      WHERE is_active = 1 AND is_safe_zone = 1
       ORDER BY id ASC
       LIMIT 1
     `
@@ -565,7 +745,8 @@ async function getCurrentSceneByPlayerId(connection, playerId) {
 
 async function createStarterScene(connection, player, zone) {
   const sceneTitle = `Awakening in ${zone.name}`;
-  const sceneText = `${player.character_name} awakens in ${zone.name}. Instinct says survive before all else.`;
+  const sceneText = `${player.character_name} awakens in ${zone.name}.
+Instinct says survive before all else.`;
 
   await connection.query(
     `
@@ -648,12 +829,7 @@ async function applyPlayerChanges(connection, player, resolution) {
   await connection.query(
     `
       UPDATE players
-      SET
-        current_zone_id = ?,
-        hp = ?,
-        energy = ?,
-        hunger = ?,
-        is_alive = ?
+      SET current_zone_id = ?, hp = ?, energy = ?, hunger = ?, is_alive = ?
       WHERE id = ?
     `,
     [nextZoneId, nextHp, nextEnergy, nextHunger, isAlive, player.id]
@@ -737,8 +913,7 @@ async function ensurePlayerTraitsRow(connection, playerId) {
         survival
       )
       VALUES (?, 0, 0, 0, 0)
-      ON DUPLICATE KEY UPDATE
-        player_id = VALUES(player_id)
+      ON DUPLICATE KEY UPDATE player_id = VALUES(player_id)
     `,
     [playerId]
   );
@@ -885,7 +1060,9 @@ function formatScene(scene) {
   ].map((action, index) => ({
     slot: index + 1,
     text: String(action?.text || DEFAULT_ACTIONS[index]?.text || "").trim(),
-    key: String(action?.key || DEFAULT_ACTIONS[index]?.key || "").trim().toLowerCase()
+    key: String(action?.key || DEFAULT_ACTIONS[index]?.key || "")
+      .trim()
+      .toLowerCase()
   }));
 
   return {
