@@ -24,12 +24,18 @@ function normalizeTraits(traits = null) {
 
 function normalizeSkills(skills = []) {
   return Array.isArray(skills)
-    ? skills.slice(0, 10).map((skill) => ({
-        id: skill?.id || null,
-        name: String(skill?.name || "").trim(),
-        skill_type: String(skill?.skill_type || "").trim().toLowerCase(),
-        description: String(skill?.description || "").trim()
-      }))
+    ? skills.slice(0, 10).map((entry) => {
+        const skill = entry?.skill || entry || {};
+
+        return {
+          id: skill?.id || entry?.skill_id || null,
+          name: String(skill?.name || "").trim(),
+          skill_key: String(skill?.skill_key || "").trim(),
+          skill_type: String(skill?.skill_type || "").trim().toLowerCase(),
+          description: String(skill?.description || "").trim(),
+          is_unlocked: Boolean(entry?.is_unlocked)
+        };
+      })
     : [];
 }
 
@@ -57,16 +63,19 @@ function buildPromptMemory({
     player: player
       ? {
           id: player.id || null,
-          name: player.name || null,
+          name: player.character_name || player.name || null,
+          title: player.title || null,
           level: Number(player.level || 1),
           hp: Number(player.hp || 0),
           max_hp: Number(player.max_hp || 0),
           energy: Number(player.energy || 0),
           max_energy: Number(player.max_energy || 0),
           hunger: Number(player.hunger || 0),
-          evolution_stage: player.evolution_stage || null,
-          race_name: player.race_name || null,
-          race_subtype_name: player.race_subtype_name || null
+          day_survived: Number(player.day_survived || 1),
+          current_hour: Number(player.current_hour || 0),
+          evolution_stage: Number(player.evolution_stage || 1),
+          race_name: player.race_name || player?.race?.name || null,
+          race_subtype_name: player.subtype_name || player?.subtype?.name || null
         }
       : null,
 
@@ -76,7 +85,8 @@ function buildPromptMemory({
           name: zone.name || null,
           description: zone.description || null,
           environment_tag: zone.environment_tag || null,
-          danger_level: Number(zone.danger_level || 0)
+          difficulty_level: zone.difficulty_level || null,
+          is_safe_zone: Number(zone.is_safe_zone || 0)
         }
       : null,
 
@@ -84,7 +94,7 @@ function buildPromptMemory({
       ? {
           scene_title: scene.scene_title || "",
           scene_text: scene.scene_text || "",
-          danger_level: Number(scene.danger_level || 0),
+          danger_level: scene.danger_level || null,
           environment_tag: scene.environment_tag || null,
           actions: normalizeActions(scene.actions || [])
         }
@@ -107,34 +117,30 @@ function buildPromptMemory({
 
 function buildNarrationUserPrompt(memory) {
   return `
-You are writing the next short scene for a dark fantasy reincarnation RPG.
+You are writing narration for a dark fantasy reincarnation RPG.
 
-Important rules:
+Rules:
 - Return ONLY valid JSON
 - No markdown
 - No code fences
-- No explanation
-- The world is harsh, reactive, mysterious, and survival-focused
-- Keep the tone immersive and tense
-- The player is weak unless the context clearly shows otherwise
-- Make the scene feel alive, dangerous, and grounded
-- Give exactly 4 actions
-- Each action must use a backend-safe key
-- Allowed action keys:
-  observe, move, rest, hide, attack, use_skill
+- No explanations
+- Do NOT generate choices
+- Do NOT generate action keys
+- Keep it short, immersive, tense, and survival-focused
+- The player is usually still weak unless the context clearly shows otherwise
 
 Return format:
 {
-  "title": "string",
-  "scene": "string",
-  "mood": "string",
-  "choices": [
-    { "key": "observe", "text": "string" },
-    { "key": "move", "text": "string" },
-    { "key": "rest", "text": "string" },
-    { "key": "hide", "text": "string" }
-  ]
+  "scene_title": "string",
+  "scene_text": "string",
+  "event_summary": "string"
 }
+
+Notes:
+- scene_title = short dramatic title
+- scene_text = 2 to 5 sentences
+- event_summary = one short summary sentence of what just happened
+- If there is no event context, event_summary can be an empty string
 
 Game context:
 ${JSON.stringify(memory, null, 2)}
@@ -148,8 +154,7 @@ function buildChoiceEnhancerUserPrompt(memory) {
 Rewrite the 4 player choice texts for a dark fantasy reincarnation RPG.
 
 Return exactly one line.
-Use this exact separator between each rewritten choice:
-||
+Use this exact separator between each rewritten choice: ||
 
 Rules:
 - Return exactly 4 rewritten choice texts
@@ -174,7 +179,7 @@ ${JSON.stringify(
     scene: {
       scene_title: memory?.scene?.scene_title || "",
       scene_text: memory?.scene?.scene_text || "",
-      danger_level: memory?.scene?.danger_level || 0,
+      danger_level: memory?.scene?.danger_level || null,
       environment_tag: memory?.scene?.environment_tag || null
     },
     event: memory?.event || null
@@ -184,7 +189,7 @@ ${JSON.stringify(
 )}
 
 Output example:
-Scan the shadows || Slip into cover || Creep past the roots || Strike without warning
+Scan the shadows || Slip into cover || Creep through the grass || Strike without warning
   `.trim();
 }
 

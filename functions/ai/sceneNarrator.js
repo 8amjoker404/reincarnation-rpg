@@ -4,7 +4,7 @@ const { generateWithHuggingFace } = require("./huggingFaceClient");
 const { SYSTEM_PROMPT } = require("./prompts/systemPrompt");
 const {
   buildPromptMemory,
-  buildSceneNarrationUserPrompt
+  buildNarrationUserPrompt
 } = require("./promptMemoryBuilder");
 
 function sanitizeText(value, fallback = "") {
@@ -35,9 +35,9 @@ async function narrateScene({
 
     const result = await generateWithHuggingFace({
       systemPrompt: SYSTEM_PROMPT,
-      userPrompt: buildSceneNarrationUserPrompt(memory),
+      userPrompt: buildNarrationUserPrompt(memory),
       jsonMode: true,
-      maxTokens: 260,
+      maxTokens: 220,
       temperature: 0.6
     });
 
