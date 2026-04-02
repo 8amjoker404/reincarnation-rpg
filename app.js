@@ -6,6 +6,7 @@ const playerRoutes = require("./routes/playerRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 const playRoutes = require("./routes/playRoutes");
 const skillRoutes = require("./routes/skillRoutes");
+const historyRoutes = require("./routes/historyRoutes");
 
 
 const { notFound, errorHandler } = require("./middleware/errorMiddleware");
@@ -40,6 +41,7 @@ app.use("/api/player", playerRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/play", playRoutes);
 app.use("/api/skills", skillRoutes);
+app.use("/api/history", historyRoutes);
 
 
 /* =========================

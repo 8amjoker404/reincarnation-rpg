@@ -3,9 +3,11 @@ const router = express.Router();
 const db = require("../config/db");
 
 const { authenticateToken } = require("../middleware/authMiddleware");
+const { playAction } = require("../functions/playEngine");
 const {
-  playAction
-} = require("../functions/playEngine");
+  saveSceneHistory,
+  extractEventSummaryFromActionResult
+} = require("../helpers/sceneHistoryHelper");
 
 // api/start
 router.post("/start", authenticateToken, async (req, res) => {
@@ -17,6 +19,7 @@ router.post("/start", authenticateToken, async (req, res) => {
     const userId = req.user?.id;
 
     if (!userId) {
+      await connection.rollback();
       return res.status(401).json({
         success: false,
         message: "Unauthorized"
@@ -130,7 +133,7 @@ The world feels dangerous. You are weak. Survival begins now.`;
         sceneTitle,
         sceneText,
         zone.environment_tag || "wild",
-        1,
+        "low",
         "Observe surroundings",
         "observe",
         "Move carefully",
@@ -143,7 +146,21 @@ The world feels dangerous. You are weak. Survival begins now.`;
     );
 
     // =========================
-    // 6. MARK STARTED
+    // 6. SAVE FIRST SCENE TO HISTORY
+    // =========================
+    await saveSceneHistory(connection, {
+      player_id: player.id,
+      zone_id: zone.id,
+      scene_title: sceneTitle,
+      scene_text: sceneText,
+      event_summary: "The journey begins.",
+      chosen_action_key: null,
+      danger_level: "low",
+      environment_tag: zone.environment_tag || "wild"
+    });
+
+    // =========================
+    // 7. MARK STARTED
     // =========================
     await connection.query(
       `UPDATE players SET has_started_scene = 1 WHERE id = ?`,
@@ -339,9 +356,6 @@ router.get("/", authenticateToken, async (req, res) => {
         };
       });
 
-    // =========================
-    // 8. FINAL RESPONSE
-    // =========================
     return res.json({
       success: true,
       message: "Current play state fetched successfully",
@@ -363,7 +377,7 @@ router.get("/", authenticateToken, async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Server error",
+      message: "Failed to fetch current play state",
       error: error.message
     });
   } finally {
@@ -371,7 +385,10 @@ router.get("/", authenticateToken, async (req, res) => {
   }
 });
 
+// POST /api/play/action
 router.post("/action", authenticateToken, async (req, res) => {
+  const connection = await db.getConnection();
+
   try {
     const userId = req.user?.id;
 
@@ -382,7 +399,59 @@ router.post("/action", authenticateToken, async (req, res) => {
       });
     }
 
+    const [players] = await connection.query(
+      `
+      SELECT *
+      FROM players
+      WHERE user_id = ? AND is_alive = 1
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    if (!players.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No active player found"
+      });
+    }
+
+    const player = players[0];
+    const chosenActionKey = String(req.body?.action_key || "").trim().toLowerCase();
+
+    const [scenes] = await connection.query(
+      `
+      SELECT *
+      FROM player_current_scene
+      WHERE player_id = ?
+      ORDER BY id DESC
+      LIMIT 1
+      `,
+      [player.id]
+    );
+
+    const previousScene = scenes[0] || null;
+
     const result = await playAction(userId, req.body || {});
+
+    if (
+      result?.status >= 200 &&
+      result?.status < 300 &&
+      result?.body?.success &&
+      previousScene
+    ) {
+      await saveSceneHistory(connection, {
+        player_id: player.id,
+        zone_id: previousScene.zone_id,
+        scene_title: previousScene.scene_title,
+        scene_text: previousScene.scene_text,
+        event_summary: extractEventSummaryFromActionResult(result),
+        chosen_action_key: chosenActionKey || null,
+        danger_level: previousScene.danger_level || "low",
+        environment_tag: previousScene.environment_tag || null
+      });
+    }
+
     return res.status(result.status).json(result.body);
   } catch (error) {
     return res.status(500).json({
@@ -390,6 +459,8 @@ router.post("/action", authenticateToken, async (req, res) => {
       message: "Failed to resolve action",
       error: error.message
     });
+  } finally {
+    connection.release();
   }
 });
 
