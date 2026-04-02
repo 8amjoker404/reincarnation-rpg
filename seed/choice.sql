@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Generation Time: Apr 02, 2026 at 03:13 PM
+-- Generation Time: Apr 02, 2026 at 05:11 PM
 -- Server version: 10.4.28-MariaDB
 -- PHP Version: 8.2.4
 
@@ -126,6 +126,41 @@ INSERT INTO `player_current_scene` (`id`, `player_id`, `zone_id`, `scene_title`,
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `player_scene_ai_cache`
+--
+
+CREATE TABLE `player_scene_ai_cache` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `player_id` int(10) UNSIGNED NOT NULL,
+  `player_scene_id` int(10) UNSIGNED NOT NULL,
+  `source_scene_updated_at` timestamp NULL DEFAULT NULL,
+  `raw_scene_title` varchar(255) DEFAULT NULL,
+  `raw_scene_text` text DEFAULT NULL,
+  `raw_actions_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`raw_actions_json`)),
+  `ai_scene_title` varchar(255) DEFAULT NULL,
+  `ai_scene_text` text DEFAULT NULL,
+  `ai_actions_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`ai_actions_json`)),
+  `ai_event_summary` text DEFAULT NULL,
+  `narration_applied` tinyint(1) NOT NULL DEFAULT 0,
+  `choice_text_applied` tinyint(1) NOT NULL DEFAULT 0,
+  `narration_model` varchar(255) DEFAULT NULL,
+  `choice_model` varchar(255) DEFAULT NULL,
+  `narration_error` text DEFAULT NULL,
+  `choice_error` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `player_scene_ai_cache`
+--
+
+INSERT INTO `player_scene_ai_cache` (`id`, `player_id`, `player_scene_id`, `source_scene_updated_at`, `raw_scene_title`, `raw_scene_text`, `raw_actions_json`, `ai_scene_title`, `ai_scene_text`, `ai_actions_json`, `ai_event_summary`, `narration_applied`, `choice_text_applied`, `narration_model`, `choice_model`, `narration_error`, `choice_error`, `created_at`, `updated_at`) VALUES
+(1, 1, 1, '2026-04-02 05:14:30', 'You Rest in Relative Safety', 'You take a rare moment to recover in Whispering Grasslands. Your breathing steadies and your body regains a little strength. Safety never lasts forever, but this pause helps.', '[{\"slot\":1,\"text\":\"Observe your surroundings\",\"key\":\"observe\"},{\"slot\":2,\"text\":\"Hide and lower your presence\",\"key\":\"hide\"},{\"slot\":3,\"text\":\"Move forward carefully\",\"key\":\"move\"},{\"slot\":4,\"text\":\"Strike first\",\"key\":\"attack\"}]', 'You Rest in Relative Safety', 'You take a rare moment to recover in Whispering Grasslands. Your breathing steadies and your body regains a little strength. Safety never lasts forever, but this pause helps.', '[{\"slot\":1,\"text\":\"Scan the darkness\",\"key\":\"observe\"},{\"slot\":2,\"text\":\"Hide in the shadows\",\"key\":\"hide\"},{\"slot\":3,\"text\":\"Creep through the undergrowth\",\"key\":\"move\"},{\"slot\":4,\"text\":\"Attack unawares\",\"key\":\"attack\"}]', NULL, 1, 1, 'mistralai/Mistral-7B-Instruct-v0.2:featherless-ai', 'mistralai/Mistral-7B-Instruct-v0.2:featherless-ai', NULL, NULL, '2026-04-02 15:03:25', '2026-04-02 15:03:25');
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `player_skills`
 --
 
@@ -146,10 +181,10 @@ CREATE TABLE `player_skills` (
 --
 
 INSERT INTO `player_skills` (`id`, `player_id`, `skill_id`, `skill_level`, `is_unlocked`, `unlock_reason`, `current_cooldown`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, 1, 0, 'Use attack 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 06:57:54'),
-(2, 1, 2, 1, 0, 'Use hide 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 06:57:54'),
-(3, 1, 3, 1, 0, 'Survive 3 days', 0, '2026-04-02 05:47:20', '2026-04-02 06:57:54'),
-(4, 1, 4, 1, 0, 'Use move 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 06:57:54');
+(1, 1, 1, 1, 0, 'Use attack 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 15:03:43'),
+(2, 1, 2, 1, 0, 'Use hide 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 15:03:43'),
+(3, 1, 3, 1, 0, 'Survive 3 days', 0, '2026-04-02 05:47:20', '2026-04-02 15:03:43'),
+(4, 1, 4, 1, 0, 'Use move 5 times', 0, '2026-04-02 05:47:20', '2026-04-02 15:03:43');
 
 -- --------------------------------------------------------
 
@@ -404,6 +439,14 @@ ALTER TABLE `player_current_scene`
   ADD KEY `idx_player_current_scene_zone_id` (`zone_id`);
 
 --
+-- Indexes for table `player_scene_ai_cache`
+--
+ALTER TABLE `player_scene_ai_cache`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uniq_player_scene_ai_cache_scene` (`player_scene_id`),
+  ADD KEY `idx_player_scene_ai_cache_player` (`player_id`);
+
+--
 -- Indexes for table `player_skills`
 --
 ALTER TABLE `player_skills`
@@ -477,16 +520,22 @@ ALTER TABLE `player_current_scene`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
+-- AUTO_INCREMENT for table `player_scene_ai_cache`
+--
+ALTER TABLE `player_scene_ai_cache`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
 -- AUTO_INCREMENT for table `player_skills`
 --
 ALTER TABLE `player_skills`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=65;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=101;
 
 --
 -- AUTO_INCREMENT for table `player_traits`
 --
 ALTER TABLE `player_traits`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
 
 --
 -- AUTO_INCREMENT for table `races`
@@ -536,6 +585,13 @@ ALTER TABLE `player_action_logs`
 ALTER TABLE `player_current_scene`
   ADD CONSTRAINT `fk_player_current_scene_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_player_current_scene_zone` FOREIGN KEY (`zone_id`) REFERENCES `zones` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Constraints for table `player_scene_ai_cache`
+--
+ALTER TABLE `player_scene_ai_cache`
+  ADD CONSTRAINT `fk_player_scene_ai_cache_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_player_scene_ai_cache_scene` FOREIGN KEY (`player_scene_id`) REFERENCES `player_current_scene` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `player_skills`
