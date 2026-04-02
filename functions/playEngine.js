@@ -78,7 +78,6 @@ async function getCurrentPlayState(userId) {
 
     const formattedPlayer = formatPlayer(freshPlayer);
     const formattedZone = formatZone(zone);
-    const formattedScene = formatScene(currentScene);
     const formattedTraits = formatTraits(traits);
 
     const enhanced = await buildEnhancedPlayPresentation({
@@ -123,8 +122,6 @@ async function getCurrentPlayState(userId) {
 
 async function playAction(userId, payload) {
   const connection = await db.getConnection();
-
-  let responseSeed = null;
 
   try {
     await connection.beginTransaction();
@@ -258,16 +255,6 @@ async function playAction(userId, payload) {
     const actionLogs = await getPlayerActionLogs(connection, updatedPlayer.id);
     const skills = await getPlayerSkillsSummary(connection, updatedPlayer.id);
 
-    responseSeed = {
-      resolutionEvent: resolution.event,
-      player: finalPlayer,
-      zone: finalZone,
-      scene: savedScene,
-      traits,
-      actionLogs,
-      skills
-    };
-
     const enhanced = await buildEnhancedPlayPresentation({
       player: finalPlayer,
       zone: finalZone,
@@ -346,7 +333,8 @@ async function buildEnhancedPlayPresentation({
   });
 
   const finalScene = {
-    ...baseScene
+    ...baseScene,
+    actions: Array.isArray(baseScene.actions) ? [...baseScene.actions] : []
   };
 
   if (narrationResult.ok) {
@@ -354,10 +342,11 @@ async function buildEnhancedPlayPresentation({
     finalScene.scene_text = narrationResult.data.scene_text || finalScene.scene_text;
   }
 
-  if (choiceResult.ok) {
+  if (choiceResult.ok && Array.isArray(choiceResult.data) && choiceResult.data.length === 4) {
     finalScene.actions = finalScene.actions.map((action, index) => ({
       ...action,
-      text: choiceResult.data[index]?.text || action.text
+      text: choiceResult.data[index]?.text || action.text,
+      key: choiceResult.data[index]?.key || action.key
     }));
   }
 
@@ -888,6 +877,17 @@ function formatZone(zone) {
 }
 
 function formatScene(scene) {
+  const actions = [
+    { slot: 1, text: scene.option_1, key: scene.option_1_key },
+    { slot: 2, text: scene.option_2, key: scene.option_2_key },
+    { slot: 3, text: scene.option_3, key: scene.option_3_key },
+    { slot: 4, text: scene.option_4, key: scene.option_4_key }
+  ].map((action, index) => ({
+    slot: index + 1,
+    text: String(action?.text || DEFAULT_ACTIONS[index]?.text || "").trim(),
+    key: String(action?.key || DEFAULT_ACTIONS[index]?.key || "").trim().toLowerCase()
+  }));
+
   return {
     id: scene.id,
     player_id: scene.player_id,
@@ -896,12 +896,15 @@ function formatScene(scene) {
     scene_text: scene.scene_text,
     environment_tag: scene.environment_tag,
     danger_level: scene.danger_level,
-    actions: [
-      { slot: 1, text: scene.option_1, key: scene.option_1_key },
-      { slot: 2, text: scene.option_2, key: scene.option_2_key },
-      { slot: 3, text: scene.option_3, key: scene.option_3_key },
-      { slot: 4, text: scene.option_4, key: scene.option_4_key }
-    ],
+    actions,
+    choice_1: actions[0]?.text || "",
+    choice_1_key: actions[0]?.key || "",
+    choice_2: actions[1]?.text || "",
+    choice_2_key: actions[1]?.key || "",
+    choice_3: actions[2]?.text || "",
+    choice_3_key: actions[2]?.key || "",
+    choice_4: actions[3]?.text || "",
+    choice_4_key: actions[3]?.key || "",
     created_at: scene.created_at,
     updated_at: scene.updated_at
   };
